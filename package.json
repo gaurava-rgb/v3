@@ -1,0 +1,20 @@
+{
+  "name": "aggieconnect-baileys-v3",
+  "version": "3.0.0",
+  "description": "Aggie Connect — Baileys v3 (fuzzy dates, match quality, trip cluster dashboard)",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node bot.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@supabase/supabase-js": "^2.39.0",
+    "@whiskeysockets/baileys": "^6.7.9",
+    "dotenv": "^16.3.1",
+    "express": "^5.2.1",
+    "openai": "^4.20.0",
+    "pino": "^9.3.2",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
