@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS v3_requests (
   source              TEXT        NOT NULL,
   source_group        TEXT,
   source_contact      TEXT,
+  sender_name         TEXT,
   request_type        TEXT,                        -- 'need' | 'offer'
   request_category    TEXT,                        -- 'ride' | 'help' | ...
   ride_plan_date      DATE,
@@ -71,6 +72,20 @@ CREATE TABLE IF NOT EXISTS outbound_queue (
   replied_at          TIMESTAMPTZ
 );
 
+-- ── wa_contacts ─────────────────────────────────────────────────────────────
+-- Persists LID→phone mappings across restarts.
+-- Populated by contacts.upsert and lid-mapping.update events.
+-- Used to backfill source_contact on existing records.
+
+CREATE TABLE IF NOT EXISTS wa_contacts (
+  lid        TEXT        PRIMARY KEY,   -- numeric LID, no @lid suffix
+  phone      TEXT,                      -- E.164 digits, no @s.whatsapp.net suffix
+  name       TEXT,                      -- pushName / notify name
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_contacts_phone ON wa_contacts(phone);
+
 -- ── indexes ─────────────────────────────────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS idx_v3_req_status   ON v3_requests(request_status);
@@ -82,3 +97,8 @@ CREATE INDEX IF NOT EXISTS idx_v3_match_offer  ON v3_matches(offer_id);
 CREATE INDEX IF NOT EXISTS idx_v3_log_group    ON v3_message_log(source_group);
 CREATE INDEX IF NOT EXISTS idx_outbound_status ON outbound_queue(status);
 CREATE INDEX IF NOT EXISTS idx_outbound_contact ON outbound_queue(contact);
+
+-- ── migrations ───────────────────────────────────────────────────────────────
+-- Run these if the table already exists without these columns.
+
+ALTER TABLE v3_requests ADD COLUMN IF NOT EXISTS sender_name TEXT;

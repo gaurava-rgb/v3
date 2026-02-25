@@ -55,6 +55,47 @@ async function seedGroups(groups) {
 }
 
 // ============================================================
+// Contact Resolution  (LID → phone)
+// ============================================================
+
+/**
+ * Persist a LID→phone mapping. Also retroactively updates any existing
+ * v3_requests and v3_message_log rows that still hold the raw LID.
+ */
+async function upsertContact(lid, phone, name) {
+    if (!lid || !phone) return;
+
+    await supabase.from('wa_contacts').upsert(
+        { lid, phone, name: name || null, updated_at: new Date().toISOString() },
+        { onConflict: 'lid' }
+    );
+
+    // Backfill existing rows that stored the raw LID
+    await Promise.all([
+        supabase.from('v3_requests')
+            .update({ source_contact: phone })
+            .eq('source_contact', lid),
+        supabase.from('v3_message_log')
+            .update({ source_contact: phone })
+            .eq('source_contact', lid)
+    ]);
+}
+
+/**
+ * Look up a phone number for a LID from the persistent store.
+ * Returns the phone string, or null if not found.
+ */
+async function resolveContactPhone(lid) {
+    if (!lid) return null;
+    const { data } = await supabase
+        .from('wa_contacts')
+        .select('phone')
+        .eq('lid', lid)
+        .maybeSingle();
+    return data?.phone || null;
+}
+
+// ============================================================
 // Message Log
 // ============================================================
 
@@ -142,6 +183,7 @@ async function saveRequest(data) {
             source: data.source || 'whatsapp-baileys-v3',
             source_group: data.sourceGroup,
             source_contact: data.sourceContact,
+            sender_name: data.senderName || null,
             request_type: data.type,
             request_category: data.category,
             ride_plan_date: data.date,
@@ -267,6 +309,8 @@ module.exports = {
     loadMonitoredGroups,
     getGroupUpdates,
     seedGroups,
+    upsertContact,
+    resolveContactPhone,
     logMessage,
     messageAlreadyProcessed,
     computeRequestHash,

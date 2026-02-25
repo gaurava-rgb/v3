@@ -22,7 +22,8 @@ const qrcode = require('qrcode-terminal');
 const { parseMessage } = require('./parser');
 const {
     saveRequest, logMessage, messageAlreadyProcessed,
-    getStats, loadMonitoredGroups, getGroupUpdates, seedGroups
+    getStats, loadMonitoredGroups, getGroupUpdates, seedGroups,
+    upsertContact, resolveContactPhone
 } = require('./db');
 const { processRequest, formatMatch } = require('./matcher');
 
@@ -79,10 +80,16 @@ async function getGroupName(jid) {
     }
 }
 
-function resolveSenderNumber(jid) {
+async function resolveSenderNumber(jid) {
     const raw = jid.split('@')[0];
     if (!isLidUser(jid)) return raw;              // already a real phone number
-    return lidToPhone.get(raw) || raw;             // try cache, fall back to lid
+    if (lidToPhone.has(raw)) return lidToPhone.get(raw);  // in-memory cache hit
+    const fromDb = await resolveContactPhone(raw); // DB fallback
+    if (fromDb) {
+        lidToPhone.set(raw, fromDb);              // warm the cache
+        return fromDb;
+    }
+    return raw;                                   // still a LID — best we can do
 }
 
 // ── core message handler ───────────────────────────────────────────────────
@@ -96,7 +103,7 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
     if (!body || body.length < 3) return;
 
     const senderJid    = msg.key.participant || msg.key.remoteJid;
-    const senderNumber = resolveSenderNumber(senderJid);
+    const senderNumber = await resolveSenderNumber(senderJid);
     const senderName   = msg.pushName || 'Unknown';
 
     const parsed = await parseMessage(body, senderName);
@@ -118,6 +125,7 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
         source:        'whatsapp-baileys-v3',
         sourceGroup:   groupName,
         sourceContact: senderNumber,
+        senderName,
         type:          parsed.type,
         category:      parsed.category,
         date:          parsed.date,
@@ -205,6 +213,29 @@ async function onConnected() {
         groupNameCache.set(jid, meta.subject);
     }
 
+    // Extract LID→phone mappings from group participants.
+    // WA sends both id (@s.whatsapp.net) and lid (@lid) for participants in some groups.
+    let mappingsExtracted = 0;
+    for (const [, meta] of Object.entries(allGroups)) {
+        for (const participant of (meta.participants || [])) {
+            const pid  = participant.id  || '';
+            const plid = participant.lid || '';
+            if (pid.endsWith('@s.whatsapp.net') && plid.endsWith('@lid')) {
+                const phone = pid.split('@')[0];
+                const lid   = plid.split('@')[0];
+                if (!lidToPhone.has(lid)) {
+                    lidToPhone.set(lid, phone);
+                    mappingsExtracted++;
+                    upsertContact(lid, phone, participant.notify || participant.name || null)
+                        .catch(err => console.error('[Bot] Failed to persist participant mapping:', err.message));
+                }
+            }
+        }
+    }
+    if (mappingsExtracted > 0) {
+        console.log(`[Bot] Extracted ${mappingsExtracted} LID→phone mapping(s) from group participants`);
+    }
+
     const waGroups = Object.entries(allGroups).map(([id, meta]) => ({
         id,
         name: meta.subject
@@ -257,21 +288,49 @@ async function connect() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Build lid→phone mapping from contact updates sent by WhatsApp
-    sock.ev.on('contacts.upsert', (contacts) => {
+    // Build lid→phone mapping from contact updates sent by WhatsApp.
+    // c.phoneNumber is the @s.whatsapp.net JID (docs v7+); c.lid is the @lid JID.
+    // contacts.upsert: fires for personal contacts when WA sends app-state patches.
+    // Provides both c.id (phone JID) and c.lid (LID JID) when available.
+    // Does NOT fire for group-only participants — those are handled via group metadata above.
+    sock.ev.on('contacts.upsert', async (contacts) => {
+        let newMappings = 0;
         for (const c of contacts) {
-            const id = c.id || '';
-            const lid = c.lid || '';
-            const phoneJid = [id, lid].find(j => j.endsWith('@s.whatsapp.net'));
-            const lidJid   = [id, lid].find(j => j.endsWith('@lid'));
-            if (phoneJid && lidJid) {
-                const phone = phoneJid.split('@')[0];
-                const lidNum = lidJid.split('@')[0];
-                lidToPhone.set(lidNum, phone);
+            const phoneRaw = c.id?.endsWith('@s.whatsapp.net') ? c.id : null;
+            const lidRaw   = c.lid || (c.id?.endsWith('@lid') ? c.id : null);
+            const phone    = phoneRaw?.split('@')[0];
+            const lid      = lidRaw?.split('@')[0];
+            const name     = c.notify || c.name || null;
+
+            if (phone && lid) {
+                lidToPhone.set(lid, phone);
+                newMappings++;
+                upsertContact(lid, phone, name).catch(err =>
+                    console.error('[Bot] Failed to persist contact mapping:', err.message)
+                );
             }
         }
-        if (lidToPhone.size > 0) {
-            console.log(`[Bot] Contact cache: ${lidToPhone.size} lid→phone mapping(s)`);
+        if (newMappings > 0) {
+            console.log(`[Bot] contacts.upsert: ${newMappings} new LID→phone mapping(s)`);
+        }
+    });
+
+    // lid-mapping.update: explicit LID↔PN pairs from WA protocol (rare but handled)
+    sock.ev.on('lid-mapping.update', async (mappings) => {
+        let newMappings = 0;
+        for (const { lid, pn } of (mappings || [])) {
+            const lidNum = lid?.split('@')[0];
+            const phone  = pn?.split('@')[0];
+            if (lidNum && phone) {
+                lidToPhone.set(lidNum, phone);
+                newMappings++;
+                upsertContact(lidNum, phone, null).catch(err =>
+                    console.error('[Bot] Failed to persist lid-mapping:', err.message)
+                );
+            }
+        }
+        if (newMappings > 0) {
+            console.log(`[Bot] lid-mapping.update: ${newMappings} mapping(s) received`);
         }
     });
 
@@ -299,6 +358,11 @@ async function connect() {
             if (loggedOut) {
                 console.error('[Bot] Logged out — clearing stale auth for fresh QR on next start.');
                 fs.rmSync('.v3_auth', { recursive: true, force: true });
+                process.exit(1);
+            }
+
+            if (reason === DisconnectReason.connectionReplaced) {
+                console.error('[Bot] Connection replaced — another instance is running with this auth. Exiting.');
                 process.exit(1);
             }
 
