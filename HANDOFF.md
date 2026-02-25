@@ -61,23 +61,23 @@ ALTER TABLE v3_requests ADD COLUMN IF NOT EXISTS sender_name TEXT;
 - **Parser fuzzy fields**: Working — `date_fuzzy`, `time_fuzzy`, `possible_dates`, `ride_plan_time` all extracted correctly
 - **Dedup**: Working — same contact + same route + same date = duplicate, skipped
 
-## Known Limitation: LID → Phone Number
-**This is a hard WhatsApp architectural limit, not a bug.**
+## LID → Phone Number Resolution (FIXED in v3.1)
+Previously accepted as a hard limitation, but Baileys 6.7.21 already had untapped data sources:
 
-WhatsApp groups use LID (`@lid`) identifiers instead of phone numbers for privacy. For a **linked device** (what Baileys is), WA does **not** send contact sync data — so `source_contact` in the DB stores the LID (e.g., `215852339204312`) instead of a phone number.
+**Resolution sources (in order of reliability):**
+1. `msg.key.participantPn` — phone number on every incoming group message (biggest win)
+2. `participant.jid` in group metadata — phone numbers for all participants at startup (handles LID addressing mode)
+3. `chats.phoneNumberShare` event — fires when a user shares their phone number
+4. `contacts.upsert` with `c.jid` field — phone JID when `c.id` is a LID
+5. `messaging-history.set` contacts array — LID→phone from history sync
+6. `lid-mapping.update` event — explicit pairs from WA protocol (rare)
+7. DB fallback via `resolveContactPhone()` — persists across restarts
 
-**What we tried:**
-1. `contacts.upsert` event — never fires for linked devices (confirmed)
-2. `lid-mapping.update` event — never fires (confirmed)
-3. Group metadata participant extraction — all groups use LID-only addressing, no phone JIDs provided
-4. Forced app-state re-sync (deleted `app-state-sync-version-regular.json`) — zero contact events emitted
+**How it works:** Each source calls `lidToPhone.set()` (in-memory) + `upsertContact()` (persists to `wa_contacts` + retroactively backfills `v3_requests` and `v3_message_log` rows that stored raw LIDs).
 
-**What we have in place:**
-- `wa_contacts` table — will auto-populate if WA ever sends a mapping (e.g., someone DMs the bot directly from a non-LID context)
-- `upsertContact()` in db.js — persists mapping AND backfills existing rows retroactively
-- `sender_name` TEXT column in `v3_requests` — stores `msg.pushName` (display name) as a human-readable identifier alongside the LID
+**Fallback:** If no phone mapping exists yet, `sender_name` (from `msg.pushName`) provides a human-readable identifier.
 
-**Practical state:** LID is a stable unique identifier — dedup, matching, and all core logic work correctly with it. Phone numbers will only populate via `wa_contacts` when/if WA sends the mapping.
+**Recovery tag:** `v3.0.0-stable` — the pre-fix baseline commit.
 
 ## Parser Schema (what Claude extracts)
 ```json

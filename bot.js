@@ -103,7 +103,11 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
     if (!body || body.length < 3) return;
 
     const senderJid    = msg.key.participant || msg.key.remoteJid;
-    const senderNumber = await resolveSenderNumber(senderJid);
+    // Prefer participantPn/senderPn (direct phone JID from Baileys) over resolution chain
+    const pnJid = msg.key.participantPn || msg.key.senderPn;
+    const senderNumber = (pnJid && !isLidUser(pnJid))
+        ? pnJid.split('@')[0]
+        : await resolveSenderNumber(senderJid);
     const senderName   = msg.pushName || 'Unknown';
 
     const parsed = await parseMessage(body, senderName);
@@ -214,21 +218,34 @@ async function onConnected() {
     }
 
     // Extract LID→phone mappings from group participants.
-    // WA sends both id (@s.whatsapp.net) and lid (@lid) for participants in some groups.
+    // Handles two addressing modes:
+    //   PN mode: participant.id = phone@s.whatsapp.net, participant.lid = LID@lid
+    //   LID mode: participant.id = LID@lid, participant.jid = phone@s.whatsapp.net
     let mappingsExtracted = 0;
     for (const [, meta] of Object.entries(allGroups)) {
         for (const participant of (meta.participants || [])) {
             const pid  = participant.id  || '';
             const plid = participant.lid || '';
+            const pjid = participant.jid || '';
+
+            let phone = null;
+            let lid   = null;
+
             if (pid.endsWith('@s.whatsapp.net') && plid.endsWith('@lid')) {
-                const phone = pid.split('@')[0];
-                const lid   = plid.split('@')[0];
-                if (!lidToPhone.has(lid)) {
-                    lidToPhone.set(lid, phone);
-                    mappingsExtracted++;
-                    upsertContact(lid, phone, participant.notify || participant.name || null)
-                        .catch(err => console.error('[Bot] Failed to persist participant mapping:', err.message));
-                }
+                // PN addressing mode: id is phone, lid is LID
+                phone = pid.split('@')[0];
+                lid   = plid.split('@')[0];
+            } else if (pid.endsWith('@lid') && pjid.endsWith('@s.whatsapp.net')) {
+                // LID addressing mode: id is LID, jid is phone
+                lid   = pid.split('@')[0];
+                phone = pjid.split('@')[0];
+            }
+
+            if (lid && phone && !lidToPhone.has(lid)) {
+                lidToPhone.set(lid, phone);
+                mappingsExtracted++;
+                upsertContact(lid, phone, participant.notify || participant.name || null)
+                    .catch(err => console.error('[Bot] Failed to persist participant mapping:', err.message));
             }
         }
     }
@@ -298,7 +315,9 @@ async function connect() {
         for (const c of contacts) {
             const phoneRaw = c.id?.endsWith('@s.whatsapp.net') ? c.id : null;
             const lidRaw   = c.lid || (c.id?.endsWith('@lid') ? c.id : null);
-            const phone    = phoneRaw?.split('@')[0];
+            // Also check c.jid: phone JID when c.id is a LID (Baileys 6.8+ Contact structure)
+            const phoneFromJid = c.jid?.endsWith('@s.whatsapp.net') ? c.jid : null;
+            const phone    = (phoneRaw || phoneFromJid)?.split('@')[0];
             const lid      = lidRaw?.split('@')[0];
             const name     = c.notify || c.name || null;
 
@@ -331,6 +350,18 @@ async function connect() {
         }
         if (newMappings > 0) {
             console.log(`[Bot] lid-mapping.update: ${newMappings} mapping(s) received`);
+        }
+    });
+
+    // chats.phoneNumberShare: fires when a user shares their phone number
+    sock.ev.on('chats.phoneNumberShare', async ({ lid: lidJid, jid: phoneJid }) => {
+        const lid   = lidJid?.split('@')[0];
+        const phone = phoneJid?.split('@')[0];
+        if (lid && phone) {
+            lidToPhone.set(lid, phone);
+            console.log(`[Bot] phoneNumberShare: mapped ${lid} → ${phone}`);
+            upsertContact(lid, phone, null)
+                .catch(err => console.error('[Bot] Failed to persist phoneNumberShare mapping:', err.message));
         }
     });
 
@@ -380,9 +411,44 @@ async function connect() {
 
     // History backfill: fires when WhatsApp sends message history on connect.
     // May arrive before onConnected() finishes loading groups — buffer if so.
-    sock.ev.on('messaging-history.set', async ({ messages }) => {
+    // Also extract LID→phone mappings from the contacts array in the history payload.
+    sock.ev.on('messaging-history.set', async ({ messages, contacts }) => {
         const msgs = messages || [];
         console.log(`[Bot] messaging-history.set: ${msgs.length} message(s) received`);
+
+        // Extract LID→phone from history sync contacts
+        const historyContacts = contacts || [];
+        let historyMappings = 0;
+        for (const c of historyContacts) {
+            const cId  = c.id  || '';
+            const cLid = c.lid || '';
+            const cJid = c.jid || '';
+
+            let lid = null;
+            let phone = null;
+
+            if (cLid.endsWith('@lid') && cJid.endsWith('@s.whatsapp.net')) {
+                lid   = cLid.split('@')[0];
+                phone = cJid.split('@')[0];
+            } else if (isLidUser(cId) && cJid.endsWith('@s.whatsapp.net')) {
+                lid   = cId.split('@')[0];
+                phone = cJid.split('@')[0];
+            } else if (cId.endsWith('@s.whatsapp.net') && cLid.endsWith('@lid')) {
+                phone = cId.split('@')[0];
+                lid   = cLid.split('@')[0];
+            }
+
+            if (lid && phone && !lidToPhone.has(lid)) {
+                lidToPhone.set(lid, phone);
+                historyMappings++;
+                upsertContact(lid, phone, c.name || c.notify || null)
+                    .catch(err => console.error('[Bot] Failed to persist history contact mapping:', err.message));
+            }
+        }
+        if (historyMappings > 0) {
+            console.log(`[Bot] History sync: ${historyMappings} new LID→phone mapping(s) from contacts`);
+        }
+
         if (!groupsLoaded) {
             pendingHistory.push(...msgs);
             console.log(`[Bot] Groups not loaded yet — buffered ${pendingHistory.length} total`);
@@ -401,6 +467,21 @@ async function connect() {
                 if (!jid || !isJidGroup(jid)) continue;
                 if (monitoredGroupIds.size > 0 && !monitoredGroupIds.has(jid)) continue;
                 if (msg.key.fromMe) continue;
+
+                // Extract LID→phone mapping from participantPn (available since Baileys 6.8+)
+                // If the participant field is a LID, participantPn carries the phone number JID.
+                const participantJid = msg.key.participant;
+                const participantPn  = msg.key.participantPn;
+                if (participantJid && isLidUser(participantJid) && participantPn) {
+                    const lid   = participantJid.split('@')[0];
+                    const phone = participantPn.split('@')[0];
+                    if (lid && phone && !lidToPhone.has(lid)) {
+                        lidToPhone.set(lid, phone);
+                        console.log(`[Bot] participantPn: mapped ${lid} → ${phone}`);
+                        upsertContact(lid, phone, msg.pushName || null)
+                            .catch(err => console.error('[Bot] Failed to persist participantPn mapping:', err.message));
+                    }
+                }
 
                 const body = extractBody(msg);
                 if (!body || body.length < 3) continue;
