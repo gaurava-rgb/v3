@@ -196,15 +196,31 @@ async function getBoardData() {
             .eq('request_category', 'ride')
             .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
             .order('created_at', { ascending: false }),
-        supabase.from('monitored_groups').select('group_id').eq('active', true),
+        supabase.from('monitored_groups').select('group_id, group_name').eq('active', true),
         supabase.from('v3_requests').select('id')
             .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
         supabase.from('v3_requests').select('id')
             .gte('created_at', today + 'T00:00:00')
     ]);
 
-    var allReqs = results[0].data || [];
-    var groupRows = results[1].data || [];
+    // Exclude test/dump groups from dashboard
+    var allGroups = results[1].data || [];
+    var testGroupIds = new Set();
+    var activeGroupIds = [];
+    for (var gi = 0; gi < allGroups.length; gi++) {
+        var gname = (allGroups[gi].group_name || '').toLowerCase();
+        if (gname.includes('dump') || gname.includes('test')) {
+            testGroupIds.add(allGroups[gi].group_id);
+        } else {
+            activeGroupIds.push(allGroups[gi]);
+        }
+    }
+
+    var rawReqs = results[0].data || [];
+    var allReqs = rawReqs.filter(function(r) {
+        return !r.source_group || !testGroupIds.has(r.source_group);
+    });
+    var groupRows = activeGroupIds;
     var weekRows = results[2].data || [];
     var todayRows = results[3].data || [];
 
