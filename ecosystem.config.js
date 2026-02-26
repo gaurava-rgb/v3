@@ -7,7 +7,7 @@ module.exports = {
             max_restarts: 10,
             autorestart: true,
             watch: false,
-            env: { NODE_ENV: 'production' },
+            env: { NODE_ENV: 'production', TZ: 'America/Chicago' },
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
         },
         {
@@ -17,7 +17,7 @@ module.exports = {
             max_restarts: 10,
             autorestart: true,
             watch: false,
-            env: { NODE_ENV: 'production' },
+            env: { NODE_ENV: 'production', TZ: 'America/Chicago' },
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
         },
         {
@@ -27,7 +27,7 @@ module.exports = {
             max_restarts: 10,
             autorestart: true,
             watch: false,
-            env: { NODE_ENV: 'production' },
+            env: { NODE_ENV: 'production', TZ: 'America/Chicago' },
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
         }
     ]
