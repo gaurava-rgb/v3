@@ -1,7 +1,7 @@
 /**
- * Aggie Connect Dashboard — v3
- * Visual trip board and request overview.
- * Port: 3004 (v3; v2 uses 3002)
+ * Aggie Connect — Dashboard v3.1
+ * Public ride board at v3.myburrow.club
+ * Port: 3004
  */
 
 require('dotenv').config();
@@ -13,156 +13,7 @@ const app = express();
 const PORT = process.env.DASHBOARD_PORT || 3004;
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-async function getTrips() {
-    const { data } = await supabase
-        .from('v3_matches')
-        .select(`
-            id, score, match_quality, created_at,
-            offer:offer_id(id, source_contact, source_group, request_destination, request_origin, ride_plan_date, ride_plan_time, request_details),
-            need:need_id(id, source_contact, source_group, request_destination, ride_plan_date, request_details)
-        `)
-        .order('created_at', { ascending: false });
-
-    const grouped = {};
-    for (const m of (data || [])) {
-        const offerId = m.offer?.id;
-        if (!offerId) continue;
-        if (!grouped[offerId]) {
-            grouped[offerId] = {
-                offer: m.offer,
-                riders: [],
-                quality: m.match_quality || 'medium'
-            };
-        }
-        grouped[offerId].riders.push({
-            ...m.need,
-            match_id: m.id,
-            score: m.score,
-            match_quality: m.match_quality
-        });
-        // Upgrade quality if a stronger match exists
-        const qOrder = { strong: 3, medium: 2, low: 1 };
-        if ((qOrder[m.match_quality] || 0) > (qOrder[grouped[offerId].quality] || 0)) {
-            grouped[offerId].quality = m.match_quality;
-        }
-    }
-    const today = new Date().toISOString().split('T')[0];
-    return Object.values(grouped)
-        .filter(t => !t.offer.ride_plan_date || t.offer.ride_plan_date >= today)
-        .sort((a, b) =>
-            new Date(a.offer.ride_plan_date || 0) - new Date(b.offer.ride_plan_date || 0)
-        );
-}
-
-async function getOpenRequests() {
-    const today = new Date().toISOString().split('T')[0];
-    const { data } = await supabase
-        .from('v3_requests')
-        .select('*')
-        .eq('request_status', 'open')
-        .or(`ride_plan_date.gte.${today},ride_plan_date.is.null`)
-        .order('ride_plan_date', { ascending: true });
-    return data || [];
-}
-
-async function getDemand() {
-    const today = new Date().toISOString().split('T')[0];
-    const { data: rows } = await supabase
-        .from('v3_requests')
-        .select('ride_plan_date, request_origin, request_destination, source_contact')
-        .eq('request_type', 'need')
-        .eq('request_status', 'open')
-        .not('ride_plan_date', 'is', null)
-        .gte('ride_plan_date', today)
-        .order('ride_plan_date', { ascending: true });
-
-    const grouped = {};
-    for (const r of (rows || [])) {
-        const dest = r.request_destination || '?';
-        const orig = r.request_origin || '?';
-        const key = r.ride_plan_date + '|' + orig + '|' + dest;
-        if (!grouped[key]) {
-            grouped[key] = { date: r.ride_plan_date, origin: orig, destination: dest, count: 0, contacts: [] };
-        }
-        grouped[key].count++;
-        if (r.source_contact) grouped[key].contacts.push(r.source_contact);
-    }
-
-    const demand = Object.values(grouped).sort((a, b) =>
-        a.date.localeCompare(b.date) || b.count - a.count
-    );
-
-    const byDate = {};
-    for (const d of demand) {
-        if (!byDate[d.date]) byDate[d.date] = [];
-        byDate[d.date].push(d);
-    }
-    return byDate;
-}
-
-async function getUnmatchedNeedClusters() {
-    const today = new Date().toISOString().split('T')[0];
-    const { data: rows } = await supabase
-        .from('v3_requests')
-        .select('ride_plan_date, request_origin, request_destination, source_contact')
-        .eq('request_type', 'need')
-        .eq('request_status', 'open')
-        .not('ride_plan_date', 'is', null)
-        .gte('ride_plan_date', today)
-        .order('ride_plan_date', { ascending: true });
-
-    const grouped = {};
-    for (const r of (rows || [])) {
-        const dest = r.request_destination || '?';
-        const orig = r.request_origin || '?';
-        const key = r.ride_plan_date + '|' + orig + '|' + dest;
-        if (!grouped[key]) {
-            grouped[key] = { date: r.ride_plan_date, origin: orig, destination: dest, contacts: [] };
-        }
-        if (r.source_contact) grouped[key].contacts.push(r.source_contact);
-    }
-
-    return Object.values(grouped)
-        .filter(g => g.contacts.length >= 2)
-        .sort((a, b) => a.date.localeCompare(b.date) || b.contacts.length - a.contacts.length);
-}
-
-async function getStats() {
-    const { data: requests } = await supabase
-        .from('v3_requests')
-        .select('request_type, request_status');
-    const { data: matches } = await supabase
-        .from('v3_matches')
-        .select('id');
-    const { data: groups } = await supabase
-        .from('monitored_groups')
-        .select('group_id')
-        .eq('active', true);
-
-    const r = requests || [];
-    return {
-        total: r.length,
-        open: r.filter(x => x.request_status === 'open').length,
-        matched: r.filter(x => x.request_status === 'matched').length,
-        needs: r.filter(x => x.request_type === 'need').length,
-        offers: r.filter(x => x.request_type === 'offer').length,
-        matches: (matches || []).length,
-        groups: (groups || []).length
-    };
-}
-
-function formatDate(d) {
-    if (!d) return 'Flexible';
-    const date = new Date(d + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function dayOffset(driverDate, riderDate) {
-    if (!driverDate || !riderDate) return null;
-    const d = new Date(driverDate + 'T00:00:00');
-    const r = new Date(riderDate + 'T00:00:00');
-    return Math.round((r - d) / (1000 * 60 * 60 * 24));
-}
+// ── Utilities ─────────────────────────────────────────────────────────────
 
 function escHtml(s) {
     if (!s) return '';
@@ -175,8 +26,7 @@ function redactPhone(phone) {
     const digits = s.replace(/\D/g, '');
     if (digits.length <= 3) return s;
     const prefix = s.startsWith('+') ? '+' : '';
-    const shown = digits.slice(0, 2) + '*'.repeat(digits.length - 3) + digits.slice(-1);
-    return prefix + shown;
+    return prefix + digits.slice(0, 2) + '*'.repeat(digits.length - 3) + digits.slice(-1);
 }
 
 function redactName(name) {
@@ -193,283 +43,314 @@ function redactContact(contact) {
     return redactName(s);
 }
 
-function qualityBadge(quality) {
-    const map = {
-        strong: { label: 'STRONG', color: '#22c55e', bg: '#f0fdf4' },
-        medium: { label: 'MEDIUM', color: '#f59e0b', bg: '#fffbeb' },
-        low:    { label: 'LOW',    color: '#ef4444', bg: '#fef2f2' }
-    };
-    const q = map[quality] || map.medium;
-    return `<span style="font-size:10px;font-weight:600;color:${q.color};background:${q.bg};padding:2px 6px;border-radius:3px;letter-spacing:0.5px">${q.label}</span>`;
+function displayName(req) {
+    if (req.sender_name) return redactName(req.sender_name);
+    return redactContact(req.source_contact);
 }
 
-function classifyRiders(riders, offerDate) {
-    const exact = [];
-    const nearby = [];
-    for (const r of riders) {
-        const offset = dayOffset(offerDate, r.ride_plan_date);
-        r._offset = offset;
-        if (offset === 0) exact.push(r);
-        else nearby.push(r);
+function formatDate(d) {
+    if (!d) return 'Flexible';
+    const date = new Date(d + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const base = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    if (date.getTime() === today.getTime()) return 'Today, ' + base;
+    if (date.getTime() === tomorrow.getTime()) return 'Tomorrow, ' + base;
+    return base;
+}
+
+function formatTime(t) {
+    if (!t) return '';
+    const [h, m] = t.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+}
+
+// ── Cluster Logic (from dashboard3) ───────────────────────────────────────
+
+function datesOverlap(a, b) {
+    if (!a.ride_plan_date && !b.ride_plan_date) return true;
+    if (!a.ride_plan_date || !b.ride_plan_date) return true;
+    if (a.ride_plan_date === b.ride_plan_date) return true;
+    if (a.date_fuzzy && (a.possible_dates || []).includes(b.ride_plan_date)) return true;
+    if (b.date_fuzzy && (b.possible_dates || []).includes(a.ride_plan_date)) return true;
+    const da = new Date(a.ride_plan_date);
+    const db = new Date(b.ride_plan_date);
+    return Math.abs((da - db) / 86400000) <= 1;
+}
+
+function buildClusters(requests) {
+    var byRoute = {};
+    for (var i = 0; i < requests.length; i++) {
+        var r = requests[i];
+        var key = (r.request_origin || '?') + '|' + (r.request_destination || '?');
+        if (!byRoute[key]) byRoute[key] = { origin: r.request_origin || '?', destination: r.request_destination || '?', members: [] };
+        byRoute[key].members.push(r);
     }
-    exact.sort((a, b) => (a.source_contact || '').localeCompare(b.source_contact || ''));
-    nearby.sort((a, b) => Math.abs(a._offset ?? 99) - Math.abs(b._offset ?? 99));
-    return { exact, nearby };
-}
 
-function findDuplicateContacts(riders) {
-    const counts = {};
-    for (const r of riders) {
-        const c = (r.source_contact || '').trim();
-        if (c) counts[c] = (counts[c] || 0) + 1;
-    }
-    return new Set(Object.keys(counts).filter(k => counts[k] > 1));
-}
+    var clusters = [];
+    var routes = Object.values(byRoute);
+    for (var ri = 0; ri < routes.length; ri++) {
+        var route = routes[ri];
+        var members = route.members;
+        var assigned = new Array(members.length).fill(-1);
+        var idx = 0;
 
-app.get('/', async (req, res) => {
-    try {
-        const [trips, openReqs, stats, demandByDate, needClusters] = await Promise.all([
-            getTrips(), getOpenRequests(), getStats(), getDemand(), getUnmatchedNeedClusters()
-        ]);
-
-        const openNeeds = openReqs.filter(r => r.request_type === 'need');
-        const openOffers = openReqs.filter(r => r.request_type === 'offer');
-
-        const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-PT7Y07LEPC"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-PT7Y07LEPC');
-</script>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aggie Connect v3 — Dashboard</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f8f8; color: #1a1a1a; line-height: 1.5; }
-  .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
-  h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
-  h1 span { color: #888; font-weight: 400; }
-  .stats { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
-  .stat { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 16px; min-width: 100px; }
-  .stat-val { font-size: 24px; font-weight: 600; }
-  .stat-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-  .section { margin-top: 32px; }
-  .section-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 12px; border-bottom: 1px solid #e5e5e5; padding-bottom: 8px; }
-  .trip-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-  .trip-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-  .trip-dest { font-size: 16px; font-weight: 600; }
-  .trip-date { font-size: 13px; color: #666; background: #f0f0f0; padding: 2px 8px; border-radius: 4px; }
-  .trip-driver { font-size: 13px; color: #555; margin-bottom: 4px; }
-  .trip-driver strong { color: #1a1a1a; }
-  .trip-time { font-size: 12px; color: #888; }
-  .riders { border-top: 1px solid #f0f0f0; padding-top: 8px; margin-top: 8px; }
-  .riders-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .rider { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
-  .rider-contact { color: #333; }
-  .rider-date { color: #888; font-size: 12px; }
-  .score { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; }
-  .score-exact { background: #22c55e; }
-  .score-nearby { background: #f59e0b; }
-  .offset-tag { font-size: 11px; color: #b45309; background: #fef3c7; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
-  .dup-tag { font-size: 10px; color: #9333ea; background: #f3e8ff; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
-  .tier-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 8px 0 4px; }
-  .tier-sep { border-top: 1px dashed #e5e5e5; margin-top: 6px; padding-top: 6px; }
-  .rider-origin-diff { font-size: 11px; color: #999; margin-left: 6px; }
-  .demand-date { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-  .demand-date-header { font-size: 15px; font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-  .demand-date-total { font-size: 12px; color: #888; font-weight: 400; }
-  .demand-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f5f5f5; }
-  .demand-row:last-child { border-bottom: none; }
-  .demand-route { font-size: 14px; font-weight: 500; }
-  .demand-count { font-size: 20px; font-weight: 600; color: #3b82f6; min-width: 40px; text-align: center; }
-  .demand-people { font-size: 11px; color: #888; }
-  .demand-bar { height: 4px; background: #3b82f6; border-radius: 2px; margin-top: 4px; min-width: 8px; }
-  .req-list { display: grid; gap: 8px; }
-  .req-item { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
-  .req-info { flex: 1; }
-  .req-route { font-size: 14px; font-weight: 500; }
-  .req-meta { font-size: 12px; color: #888; margin-top: 2px; }
-  .req-date { font-size: 13px; color: #666; background: #f0f0f0; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
-  .badge-need { border-left: 3px solid #3b82f6; }
-  .badge-offer { border-left: 3px solid #22c55e; }
-  .cluster-card { background: #fff; border: 1px solid #e5e5e5; border-left: 3px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-  .cluster-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-  .cluster-route { font-size: 16px; font-weight: 600; }
-  .cluster-badge { font-size: 12px; color: #b45309; background: #fef3c7; padding: 2px 10px; border-radius: 4px; font-weight: 500; }
-  .cluster-people { font-size: 13px; color: #555; }
-  .cluster-contact { padding: 3px 0; font-size: 13px; color: #333; }
-  .empty { color: #aaa; font-size: 14px; padding: 24px; text-align: center; }
-  .refresh { float: right; font-size: 12px; color: #888; text-decoration: none; border: 1px solid #ddd; padding: 4px 12px; border-radius: 4px; }
-  .refresh:hover { background: #f0f0f0; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .nav-links { font-size: 12px; color: #888; margin-top: 4px; }
-  .nav-links a { color: #3b82f6; text-decoration: none; margin-right: 12px; }
-  @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } .stats { gap: 8px; } .stat { min-width: 80px; padding: 8px 12px; } }
-</style>
-</head>
-<body>
-<div class="container">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start">
-    <div>
-      <h1>Aggie Connect <span>v3 Dashboard</span></h1>
-      <div class="nav-links">
-        <a href="http://localhost:3005">Monitor</a>
-        <a href="http://localhost:3006">Trip Clusters (dash3)</a>
-      </div>
-    </div>
-    <a href="/" class="refresh">Refresh</a>
-  </div>
-
-  <div class="stats">
-    <div class="stat"><div class="stat-val">${stats.total}</div><div class="stat-label">Requests</div></div>
-    <div class="stat"><div class="stat-val">${stats.matches}</div><div class="stat-label">Matches</div></div>
-    <div class="stat"><div class="stat-val">${stats.open}</div><div class="stat-label">Open</div></div>
-    <div class="stat"><div class="stat-val">${stats.needs}</div><div class="stat-label">Needs</div></div>
-    <div class="stat"><div class="stat-val">${stats.offers}</div><div class="stat-label">Offers</div></div>
-    <div class="stat"><div class="stat-val">${stats.groups}</div><div class="stat-label">Groups</div></div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Demand Board — People Looking for Rides</div>
-    ${Object.keys(demandByDate).length === 0 ? '<div class="empty">No open ride needs with dates</div>' :
-      Object.entries(demandByDate).map(([date, routes]) => {
-        const total = routes.reduce((s, r) => s + r.count, 0);
-        const maxCount = Math.max(...routes.map(r => r.count));
-        return `<div class="demand-date">
-          <div class="demand-date-header">
-            <span>${formatDate(date)}</span>
-            <span class="demand-date-total">${total} ${total === 1 ? 'person looking' : 'people looking'} for a ride</span>
-          </div>
-          ${routes.map(r => {
-            const barWidth = Math.round((r.count / maxCount) * 100);
-            const pLabel = r.count === 1 ? 'person needs' : 'people need';
-            return `<div class="demand-row">
-              <div style="flex:1">
-                <div class="demand-route">${escHtml(r.origin)} → ${escHtml(r.destination)}</div>
-                <div class="demand-people">${r.count} ${pLabel} a ride</div>
-                <div class="demand-bar" style="width:${barWidth}%"></div>
-              </div>
-              <div class="demand-count">${r.count}</div>
-            </div>`;
-          }).join('')}
-        </div>`;
-      }).join('')}
-  </div>
-
-  <div class="section">
-    <div class="section-title">Matched Trips (${trips.length})</div>
-    ${trips.length === 0 ? '<div class="empty">No matched trips yet</div>' : trips.map(t => {
-        const o = t.offer;
-        const time = o.ride_plan_time || o.request_details?.time || '';
-        const { exact, nearby } = classifyRiders(t.riders, o.ride_plan_date);
-        const dupes = findDuplicateContacts(t.riders);
-
-        function renderRider(r, tier) {
-            const offsetVal = r._offset;
-            const offsetLabel = tier === 'nearby' && offsetVal != null
-                ? (offsetVal > 0 ? `+${offsetVal} day` : `${offsetVal} day`)
-                : '';
-            const isDup = dupes.has((r.source_contact || '').trim());
-            const originDiff = r.request_origin && o.request_origin
-                && r.request_origin.toLowerCase() !== o.request_origin.toLowerCase()
-                ? r.request_origin : '';
-            return '<div class="rider">' +
-              '<span class="rider-contact">' +
-                '<span class="score score-' + tier + '"></span>' +
-                escHtml(redactContact(r.source_contact)) +
-                (originDiff ? '<span class="rider-origin-diff">from ' + escHtml(originDiff) + '</span>' : '') +
-                (isDup ? '<span class="dup-tag">dup?</span>' : '') +
-              '</span>' +
-              '<span class="rider-date">' +
-                formatDate(r.ride_plan_date) +
-                (offsetLabel ? '<span class="offset-tag">' + offsetLabel + '</span>' : '') +
-              '</span>' +
-            '</div>';
+        for (var a = 0; a < members.length; a++) {
+            if (assigned[a] !== -1) continue;
+            assigned[a] = idx;
+            for (var b = a + 1; b < members.length; b++) {
+                if (assigned[b] !== -1) continue;
+                if (datesOverlap(members[a], members[b])) assigned[b] = idx;
+            }
+            idx++;
         }
 
-        return `<div class="trip-card">
-      <div class="trip-header">
-        <div>
-          <div class="trip-dest">${escHtml(o.request_origin || '?')} → ${escHtml(o.request_destination || '?')}</div>
-          <div class="trip-driver" style="display:flex;align-items:center;gap:8px">
-            <span>Driver: <strong>${escHtml(redactContact(o.source_contact))}</strong></span>
-            ${qualityBadge(t.quality)}
-          </div>
-          ${time ? `<div class="trip-time">${escHtml(time)}</div>` : ''}
-        </div>
-        <div class="trip-date">${formatDate(o.ride_plan_date)}</div>
-      </div>
-      <div class="riders">
-        <div class="riders-label">${t.riders.length} rider${t.riders.length !== 1 ? 's' : ''} matched</div>
-        ${exact.length > 0 ? '<div class="tier-label">Exact date (' + exact.length + ')</div>' + exact.map(r => renderRider(r, 'exact')).join('') : ''}
-        ${nearby.length > 0 ? '<div class="tier-sep"></div><div class="tier-label">Nearby date (' + nearby.length + ')</div>' + nearby.map(r => renderRider(r, 'nearby')).join('') : ''}
-      </div>
-    </div>`;
-    }).join('')}
-  </div>
+        var groups = {};
+        for (var gi = 0; gi < members.length; gi++) {
+            if (!groups[assigned[gi]]) groups[assigned[gi]] = [];
+            groups[assigned[gi]].push(members[gi]);
+        }
 
-  <div class="section">
-    <div class="section-title">Matched Trips — No Ride Yet (${needClusters.length})</div>
-    ${needClusters.length === 0 ? '<div class="empty">No unmatched need clusters right now</div>' : needClusters.map(c => {
-        return `<div class="cluster-card">
-          <div class="cluster-header">
-            <div>
-              <div class="cluster-route">${escHtml(c.origin)} → ${escHtml(c.destination)}</div>
-              <div class="cluster-people">${c.contacts.length} people looking — no ride yet</div>
-            </div>
-            <div><span class="cluster-badge">${formatDate(c.date)}</span></div>
-          </div>
-          <div style="border-top:1px solid #f0f0f0;padding-top:8px;margin-top:4px">
-            ${c.contacts.map(ct => '<div class="cluster-contact">' + escHtml(redactContact(ct)) + '</div>').join('')}
-          </div>
-        </div>`;
-    }).join('')}
-  </div>
+        var groupValues = Object.values(groups);
+        for (var gvi = 0; gvi < groupValues.length; gvi++) {
+            var g = groupValues[gvi];
+            var offers = g.filter(function(m) { return m.request_type === 'offer'; });
+            var needs = g.filter(function(m) { return m.request_type === 'need'; });
+            var dates = g.map(function(m) { return m.ride_plan_date; }).filter(Boolean).sort();
+            clusters.push({
+                origin: route.origin,
+                destination: route.destination,
+                offers: offers,
+                needs: needs,
+                repDate: (offers[0] && offers[0].ride_plan_date) || dates[0] || null,
+                hasOffer: offers.length > 0
+            });
+        }
+    }
 
-  <div class="section">
-    <div class="section-title">Open Requests</div>
-    <div class="two-col">
-      <div>
-        <div class="section-title" style="font-size:12px;border:none;margin-bottom:8px">Needs (${openNeeds.length})</div>
-        <div class="req-list">
-          ${openNeeds.length === 0 ? '<div class="empty">None</div>' : openNeeds.map(r => `
-            <div class="req-item badge-need">
-              <div class="req-info">
-                <div class="req-route">${escHtml(r.request_origin || '?')} → ${escHtml(r.request_destination || '?')}</div>
-                <div class="req-meta">${escHtml(redactContact(r.source_contact))} · ${escHtml(r.source_group || '')}</div>
-              </div>
-              <div class="req-date">${formatDate(r.ride_plan_date)}</div>
-            </div>`).join('')}
-        </div>
-      </div>
-      <div>
-        <div class="section-title" style="font-size:12px;border:none;margin-bottom:8px">Offers (${openOffers.length})</div>
-        <div class="req-list">
-          ${openOffers.length === 0 ? '<div class="empty">None</div>' : openOffers.map(r => `
-            <div class="req-item badge-offer">
-              <div class="req-info">
-                <div class="req-route">${escHtml(r.request_origin || '?')} → ${escHtml(r.request_destination || '?')}</div>
-                <div class="req-meta">${escHtml(redactContact(r.source_contact))} · ${escHtml(r.source_group || '')}</div>
-              </div>
-              <div class="req-date">${formatDate(r.ride_plan_date)}</div>
-            </div>`).join('')}
-        </div>
-      </div>
-    </div>
-  </div>
+    clusters.sort(function(a, b) {
+        return (a.repDate || '9999').localeCompare(b.repDate || '9999');
+    });
+    return clusters;
+}
 
-  <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:11px;color:#aaa;text-align:center">
-    Aggie Connect v3 · Auto-refreshes on page load · Data from Supabase
-  </div>
-</div>
-</body>
-</html>`;
+// ── Render helpers ────────────────────────────────────────────────────────
+
+function renderRouteCard(c) {
+    var offerCount = c.offers.length;
+    var needCount = c.needs.length;
+    var parts = [];
+
+    parts.push('<div class="route-card">');
+    parts.push('<span class="route-name">' + escHtml(c.origin) + ' &rarr; ' + escHtml(c.destination) + '</span>');
+
+    if (offerCount > 0) {
+        var oNames = c.offers.map(function(o) { return escHtml(displayName(o)); }).join(', ');
+        var times = c.offers.map(function(o) { return o.ride_plan_time ? formatTime(o.ride_plan_time) : null; }).filter(Boolean);
+        var timeStr = times.length > 0 ? ' (' + escHtml(times.join(', ')) + ')' : '';
+        var verb = offerCount === 1 ? 'offering a ride' : 'offering rides';
+        parts.push('<div class="route-offer">&#x1F697; ' + offerCount + ' ' + verb + timeStr + ' <span class="names">&mdash; ' + oNames + '</span></div>');
+    }
+
+    if (needCount > 0) {
+        var nNames = c.needs.map(function(n) { return escHtml(displayName(n)); }).join(', ');
+        var nverb = needCount === 1 ? 'looking for a ride' : 'looking for rides';
+        parts.push('<div class="route-needs">&#x1F44B; ' + needCount + ' ' + nverb + ' <span class="names">&mdash; ' + nNames + '</span></div>');
+    }
+
+    if (c.hasOffer && needCount > 0) {
+        parts.push('<div class="route-status status-match">&#x1F7E2; Going the same way</div>');
+    } else if (!c.hasOffer && needCount > 0) {
+        parts.push('<div class="route-status status-none">Nobody&#x2019;s driving as of now</div>');
+    }
+
+    parts.push('</div>');
+    return parts.join('\n');
+}
+
+function renderDateGroup(dateKey, dateClusters) {
+    var dateLabel = dateKey === 'flexible' ? 'Flexible Dates' : formatDate(dateKey);
+    var cards = dateClusters.map(renderRouteCard).join('\n');
+    return '<div class="date-group">\n<div class="date-label">' + escHtml(dateLabel) + '</div>\n' + cards + '\n</div>';
+}
+
+function renderOpportunity(c) {
+    var dateStr = c.repDate ? formatDate(c.repDate) : 'soon';
+    var count = c.needs.length;
+    var plural = count !== 1 ? 's' : '';
+    return '<div class="opportunity">' + count + ' student' + plural + ' heading to ' + escHtml(c.destination) + ' ' + escHtml(dateStr) + ' &mdash; no ride offered yet</div>';
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────
+
+async function getBoardData() {
+    var today = new Date().toISOString().split('T')[0];
+
+    var results = await Promise.all([
+        supabase.from('v3_requests').select('*')
+            .eq('request_category', 'ride')
+            .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
+            .order('created_at', { ascending: false }),
+        supabase.from('monitored_groups').select('group_id').eq('active', true),
+        supabase.from('v3_requests').select('id')
+            .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
+        supabase.from('v3_requests').select('id')
+            .gte('created_at', today + 'T00:00:00')
+    ]);
+
+    var allReqs = results[0].data || [];
+    var groupRows = results[1].data || [];
+    var weekRows = results[2].data || [];
+    var todayRows = results[3].data || [];
+
+    var clusters = buildClusters(allReqs);
+
+    var byDate = {};
+    for (var i = 0; i < clusters.length; i++) {
+        var key = clusters[i].repDate || 'flexible';
+        if (!byDate[key]) byDate[key] = [];
+        byDate[key].push(clusters[i]);
+    }
+
+    var sortedDates = Object.keys(byDate).sort(function(a, b) {
+        if (a === 'flexible') return 1;
+        if (b === 'flexible') return -1;
+        return a.localeCompare(b);
+    });
+
+    var opportunities = clusters.filter(function(c) { return !c.hasOffer && c.needs.length >= 2; });
+
+    return {
+        byDate: byDate,
+        sortedDates: sortedDates,
+        opportunities: opportunities,
+        totalGroups: groupRows.length,
+        weekCount: weekRows.length,
+        todayCount: todayRows.length,
+        totalRequests: allReqs.length
+    };
+}
+
+// ── Route ─────────────────────────────────────────────────────────────────
+
+app.get('/', async function(req, res) {
+    try {
+        var data = await getBoardData();
+
+        var boardHtml;
+        if (data.sortedDates.length === 0) {
+            boardHtml = '<div class="empty">No ride activity this week yet. The bot is monitoring groups and will show activity here as requests come in.</div>';
+        } else {
+            boardHtml = data.sortedDates.map(function(dk) {
+                return renderDateGroup(dk, data.byDate[dk]);
+            }).join('\n');
+        }
+
+        var oppsHtml = '';
+        if (data.opportunities.length > 0) {
+            oppsHtml = '<div class="section">\n<div class="section-header">Opportunities</div>\n' +
+                data.opportunities.map(renderOpportunity).join('\n') +
+                '\n</div>';
+        }
+
+        var activityMsg;
+        if (data.todayCount > 0) {
+            activityMsg = 'Saw <strong>' + data.todayCount + '</strong> ride request' + (data.todayCount !== 1 ? 's' : '') + ' today across <strong>' + data.totalGroups + '</strong> groups';
+        } else {
+            activityMsg = 'Monitoring <strong>' + data.totalGroups + '</strong> WhatsApp group' + (data.totalGroups !== 1 ? 's' : '') + ' for ride requests';
+        }
+
+        var weekLabel = data.weekCount + ' ride request' + (data.weekCount !== 1 ? 's' : '');
+        var groupLabel = data.totalGroups + ' WhatsApp group' + (data.totalGroups !== 1 ? 's' : '');
+
+        var html = [
+            '<!DOCTYPE html>',
+            '<html lang="en">',
+            '<head>',
+            '<!-- Google tag (gtag.js) -->',
+            '<script async src="https://www.googletagmanager.com/gtag/js?id=G-PT7Y07LEPC"></script>',
+            '<script>',
+            '  window.dataLayer = window.dataLayer || [];',
+            '  function gtag(){dataLayer.push(arguments);}',
+            "  gtag('js', new Date());",
+            "  gtag('config', 'G-PT7Y07LEPC');",
+            '</script>',
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            '<title>Aggie Connect</title>',
+            '<style>',
+            '  * { margin: 0; padding: 0; box-sizing: border-box; }',
+            '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #1a1a1a; line-height: 1.6; }',
+            '  .container { max-width: 720px; margin: 0 auto; padding: 32px 16px; }',
+            '',
+            '  .hero { text-align: center; margin-bottom: 40px; }',
+            '  .hero h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }',
+            '  .hero .subtitle { font-size: 15px; color: #666; }',
+            '  .hero .subtitle strong { color: #1a1a1a; }',
+            '',
+            '  .section { margin-bottom: 36px; }',
+            '  .section-header { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #999; margin-bottom: 16px; }',
+            '',
+            '  .date-group { margin-bottom: 24px; }',
+            '  .date-label { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #e5e5e5; }',
+            '',
+            '  .route-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 16px 18px; margin-bottom: 10px; }',
+            '  .route-name { font-size: 16px; font-weight: 600; display: block; margin-bottom: 8px; }',
+            '  .route-offer { font-size: 14px; color: #333; margin-bottom: 4px; }',
+            '  .route-needs { font-size: 14px; color: #333; margin-bottom: 4px; }',
+            '  .names { color: #999; font-size: 13px; }',
+            '  .route-status { font-size: 13px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0; }',
+            '  .status-match { color: #16a34a; }',
+            '  .status-none { color: #9ca3af; font-style: italic; }',
+            '',
+            '  .opportunity { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; font-size: 14px; color: #92400e; }',
+            '',
+            '  .activity { text-align: center; font-size: 14px; color: #888; padding: 16px; background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; }',
+            '  .activity strong { color: #333; }',
+            '',
+            '  .footer { text-align: center; font-size: 11px; color: #bbb; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e8e8e8; }',
+            '',
+            '  .empty { text-align: center; color: #aaa; font-size: 14px; padding: 32px 16px; }',
+            '',
+            '  @media (max-width: 480px) {',
+            '    .container { padding: 20px 12px; }',
+            '    .hero h1 { font-size: 24px; }',
+            '    .route-card { padding: 14px; }',
+            '  }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '<div class="container">',
+            '',
+            '  <div class="hero">',
+            '    <h1>Aggie Connect</h1>',
+            '    <p class="subtitle">Tracking <strong>' + weekLabel + '</strong> across <strong>' + groupLabel + '</strong> this week</p>',
+            '  </div>',
+            '',
+            '  <div class="section">',
+            '    <div class="section-header">Going the Same Way</div>',
+            '    ' + boardHtml,
+            '  </div>',
+            '',
+            oppsHtml,
+            '',
+            '  <div class="section">',
+            '    <div class="activity">' + activityMsg + '</div>',
+            '  </div>',
+            '',
+            '  <div class="footer">',
+            '    ' + data.totalRequests + ' total requests &middot; ' + data.totalGroups + ' groups monitored &middot; v3.1',
+            '  </div>',
+            '',
+            '</div>',
+            '</body>',
+            '</html>'
+        ].join('\n');
 
         res.send(html);
     } catch (err) {
@@ -478,6 +359,6 @@ app.get('/', async (req, res) => {
     }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Dashboard] Running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', function() {
+    console.log('[Dashboard] v3.1 running at http://localhost:' + PORT);
 });
