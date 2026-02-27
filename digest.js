@@ -18,6 +18,7 @@ const pino = require('pino');
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
+const qrcode = require('qrcode-terminal');
 
 // ── Config ───────────────────────────────────────────────────────────────
 
@@ -357,8 +358,9 @@ async function connect() {
         var lastDisconnect = update.lastDisconnect;
 
         if (update.qr) {
-            console.log('[Digest] QR code received — scan with WhatsApp > Linked Devices');
-            console.log('[Digest] QR: ' + update.qr);
+            console.log('\n=== Scan this QR code with WhatsApp ===\n');
+            qrcode.generate(update.qr, { small: true });
+            console.log('Open WhatsApp > Settings > Linked Devices > Link a Device\n');
         }
 
         if (connection === 'open') {
