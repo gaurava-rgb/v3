@@ -100,18 +100,17 @@ function phoneDigitsOnly(contact) {
     return digits;
 }
 
-function formatRelativeTime(isoStr) {
+function formatMsgTime(isoStr) {
     if (!isoStr) return '';
     var d = new Date(isoStr);
-    var now = new Date();
-    var diffMs = now - d;
-    var mins = Math.floor(diffMs / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return mins + 'm ago';
-    var hrs = Math.floor(mins / 60);
-    if (hrs < 24) return hrs + 'h ago';
-    var days = Math.floor(hrs / 24);
-    return days + 'd ago';
+    var month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+    var day = d.getDate();
+    var h = d.getHours();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    var min = d.getMinutes();
+    var minStr = min < 10 ? '0' + min : '' + min;
+    return month + ' ' + day + ', ' + h + ':' + minStr + ' ' + ampm;
 }
 
 function generateRiderMessage(need, offer) {
@@ -525,7 +524,7 @@ function renderMatchCard(match, digestKey) {
     parts.push('    <div class="match-person-name">' + escHtml(needName) + '</div>');
     parts.push('    <div class="match-person-phone">' + escHtml(needPhone) + '</div>');
     if (need.raw_message) {
-        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(need.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatRelativeTime(need.created_at)) + '</span></div>');
+        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(need.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatMsgTime(need.created_at)) + '</span></div>');
     }
     parts.push('    <div class="pre-msg">' + escHtml(riderMsg) + '</div>');
     if (needDigits) {
@@ -539,7 +538,7 @@ function renderMatchCard(match, digestKey) {
     parts.push('    <div class="match-person-name">' + escHtml(offerName) + '</div>');
     parts.push('    <div class="match-person-phone">' + escHtml(offerPhone) + '</div>');
     if (offer.raw_message) {
-        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(offer.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatRelativeTime(offer.created_at)) + '</span></div>');
+        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(offer.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatMsgTime(offer.created_at)) + '</span></div>');
     }
     parts.push('    <div class="pre-msg">' + escHtml(driverMsg) + '</div>');
     if (offerDigits) {
@@ -578,7 +577,7 @@ function renderClusterCard(cluster, digestKey) {
         parts.push('    <div class="match-person-phone">' + escHtml(phone) + '</div>');
         parts.push('    <div class="cluster-group-name" style="font-size:12px;color:#999;">' + escHtml(groupName) + '</div>');
         if (person.raw_message) {
-            parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(person.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatRelativeTime(person.created_at)) + '</span></div>');
+            parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(person.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatMsgTime(person.created_at)) + '</span></div>');
         }
         parts.push('    <div class="pre-msg">' + escHtml(msg) + '</div>');
         if (digits) {
