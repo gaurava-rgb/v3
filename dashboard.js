@@ -116,6 +116,15 @@ function generateDriverMessage(need, offer) {
         ' \u2014 same as you. Want me to connect you both? \uD83D\uDE42';
 }
 
+function generateSameWayMessage(person, cluster) {
+    var otherCount = cluster.needs.length - 1;
+    var dest = cluster.destination || 'your destination';
+    var dateStr = cluster.repDate ? formatDate(cluster.repDate) : 'soon';
+    var people = otherCount === 1 ? '1 other person is' : otherCount + ' other people are';
+    return 'Hey! ' + people + ' also heading to ' + dest + ' ' + dateStr +
+        '. Want me to connect you all so you can coordinate? \uD83D\uDE42';
+}
+
 // ── Cluster Logic (from dashboard3) ───────────────────────────────────────
 
 function datesOverlap(a, b) {
@@ -393,6 +402,45 @@ async function markNotified(matchIds) {
     }
 }
 
+async function fetchSameWayClusters() {
+    var today = new Date().toISOString().split('T')[0];
+
+    var results = await Promise.all([
+        supabase.from('v3_requests').select('id, source_group, source_contact, sender_name, request_type, request_category, ride_plan_date, ride_plan_time, date_fuzzy, possible_dates, request_origin, request_destination, raw_message')
+            .eq('request_category', 'ride')
+            .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
+            .order('created_at', { ascending: false }),
+        supabase.from('monitored_groups').select('group_id, group_name, is_test')
+    ]);
+
+    // Build test-group filter (both JIDs and names)
+    var groupMap = new Map();
+    var testGroups = new Set();
+    var groups = (results[1].data || []);
+    for (var gi = 0; gi < groups.length; gi++) {
+        groupMap.set(groups[gi].group_id, groups[gi].group_name);
+        if (groups[gi].is_test) {
+            testGroups.add(groups[gi].group_id);
+            if (groups[gi].group_name) testGroups.add(groups[gi].group_name);
+        }
+    }
+
+    var rawReqs = results[0].data || [];
+    var allReqs = rawReqs.filter(function(r) {
+        return !r.source_group || !testGroups.has(r.source_group);
+    });
+
+    // Attach resolved group names
+    for (var ri = 0; ri < allReqs.length; ri++) {
+        allReqs[ri].groupName = groupMap.get(allReqs[ri].source_group) || allReqs[ri].source_group || 'Unknown Group';
+    }
+
+    var clusters = buildClusters(allReqs);
+
+    // Return only clusters with 2+ people looking for rides
+    return clusters.filter(function(c) { return c.needs.length >= 2; });
+}
+
 function digestAuth(req, res) {
     if (!DIGEST_KEY) {
         res.status(500).send('DIGEST_KEY not configured');
@@ -476,6 +524,45 @@ function renderMatchCard(match, digestKey) {
     parts.push('  </div>');
 
     parts.push('  ' + markBtn);
+    parts.push('</div>');
+    return parts.join('\n');
+}
+
+function renderClusterCard(cluster, digestKey) {
+    var dateLabel = cluster.repDate ? formatDate(cluster.repDate) : 'Flexible date';
+    var parts = [];
+
+    parts.push('<div class="cluster-card">');
+    parts.push('  <div class="match-date">' + escHtml(dateLabel) + '</div>');
+    parts.push('  <div class="match-route">' + escHtml(cluster.origin) + ' &rarr; ' + escHtml(cluster.destination) + '</div>');
+    parts.push('  <div class="cluster-count">\uD83D\uDC65 ' + cluster.needs.length + ' people looking for rides</div>');
+
+    if (cluster.offers.length > 0) {
+        parts.push('  <div class="cluster-has-offer">\uD83D\uDE97 ' + cluster.offers.length + ' offering — also shown in matches above</div>');
+    }
+
+    for (var i = 0; i < cluster.needs.length; i++) {
+        var person = cluster.needs[i];
+        var name = person.sender_name || person.source_contact || 'Unknown';
+        var phone = digestFormatPhone(person.source_contact);
+        var digits = phoneDigitsOnly(person.source_contact);
+        var msg = generateSameWayMessage(person, cluster);
+        var groupName = person.groupName || 'Unknown Group';
+
+        parts.push('  <div class="match-person">');
+        parts.push('    <div class="match-person-name">' + escHtml(name) + '</div>');
+        parts.push('    <div class="match-person-phone">' + escHtml(phone) + '</div>');
+        parts.push('    <div class="cluster-group-name" style="font-size:12px;color:#999;">' + escHtml(groupName) + '</div>');
+        if (person.raw_message) {
+            parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(person.raw_message) + '&rdquo;</div>');
+        }
+        parts.push('    <div class="pre-msg">' + escHtml(msg) + '</div>');
+        if (digits) {
+            parts.push('    <a class="wa-link" href="https://wa.me/' + digits + '?text=' + encodeURIComponent(msg) + '" target="_blank">\uD83D\uDCAC Message ' + escHtml(digestFirstName(person.sender_name)) + '</a>');
+        }
+        parts.push('  </div>');
+    }
+
     parts.push('</div>');
     return parts.join('\n');
 }
@@ -626,7 +713,10 @@ app.get('/digest', async function(req, res) {
 
     try {
         var showAll = req.query.show === 'all';
-        var matches = await fetchOpenMatches(showAll);
+        var matchesPromise = fetchOpenMatches(showAll);
+        var clustersPromise = fetchSameWayClusters();
+        var matches = await matchesPromise;
+        var clusters = await clustersPromise;
         var unhandledCount = matches.filter(function(m) { return !m.notified; }).length;
         var KEY = req.query.key;
 
@@ -635,6 +725,13 @@ app.get('/digest', async function(req, res) {
             cardsHtml = '<div class="empty-state"><div class="check">&#x2705;</div>All clear! No unnotified matches.</div>';
         } else {
             cardsHtml = matches.map(function(m) { return renderMatchCard(m, KEY); }).join('\n');
+        }
+
+        var clustersHtml;
+        if (clusters.length === 0) {
+            clustersHtml = '<div class="empty-state" style="padding:24px;font-size:14px;color:#aaa;">No same-way clusters right now.</div>';
+        } else {
+            clustersHtml = clusters.map(function(c) { return renderClusterCard(c, KEY); }).join('\n');
         }
 
         var toggleHref = '/digest?key=' + encodeURIComponent(KEY) + (showAll ? '' : '&show=all');
@@ -685,6 +782,12 @@ app.get('/digest', async function(req, res) {
             '',
             '  .handled-badge { display: inline-block; background: #e8e8e8; color: #888; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; font-weight: 400; }',
             '',
+            '  .section-divider { font-size: 18px; font-weight: 700; margin: 32px 0 16px; padding-top: 24px; border-top: 2px solid #e8e8e8; }',
+            '  .section-subtitle { font-size: 13px; color: #888; margin-bottom: 16px; font-weight: 400; }',
+            '  .cluster-card { background: #fff; border: 1px solid #e0d4f5; border-radius: 10px; padding: 18px; margin-bottom: 14px; }',
+            '  .cluster-count { font-size: 14px; color: #555; margin-bottom: 4px; }',
+            '  .cluster-has-offer { font-size: 12px; color: #16a34a; margin-bottom: 12px; }',
+            '',
             '  .empty-state { text-align: center; padding: 48px 16px; color: #aaa; font-size: 16px; }',
             '  .empty-state .check { font-size: 48px; margin-bottom: 12px; }',
             '',
@@ -709,6 +812,10 @@ app.get('/digest', async function(req, res) {
             '  </div>',
             '',
             '  ' + cardsHtml,
+            '',
+            '  <div class="section-divider">\uD83D\uDE95 Going the Same Way &mdash; ' + clusters.length + ' cluster' + (clusters.length !== 1 ? 's' : '') + '</div>',
+            '  <div class="section-subtitle">People heading the same direction who could share a cab or coordinate</div>',
+            '  ' + clustersHtml,
             '',
             '  <div class="footer">Admin Digest &middot; v3.1</div>',
             '',
