@@ -100,6 +100,20 @@ function phoneDigitsOnly(contact) {
     return digits;
 }
 
+function formatRelativeTime(isoStr) {
+    if (!isoStr) return '';
+    var d = new Date(isoStr);
+    var now = new Date();
+    var diffMs = now - d;
+    var mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    var days = Math.floor(hrs / 24);
+    return days + 'd ago';
+}
+
 function generateRiderMessage(need, offer) {
     var dest = need.request_destination || offer.request_destination || 'your destination';
     var dateStr = offer.ride_plan_date ? formatDate(offer.ride_plan_date) : 'soon';
@@ -338,7 +352,7 @@ async function fetchOpenMatches(showAll) {
 
     var reqResult = await supabase
         .from('v3_requests')
-        .select('id, source_group, source_contact, sender_name, request_type, ride_plan_date, ride_plan_time, request_origin, request_destination, raw_message')
+        .select('id, source_group, source_contact, sender_name, request_type, ride_plan_date, ride_plan_time, request_origin, request_destination, raw_message, created_at')
         .in('id', requestIds);
     if (reqResult.error) throw new Error('Failed to fetch requests: ' + reqResult.error.message);
 
@@ -416,7 +430,7 @@ async function fetchSameWayClusters() {
     var today = new Date().toISOString().split('T')[0];
 
     var results = await Promise.all([
-        supabase.from('v3_requests').select('id, source_group, source_contact, sender_name, request_type, request_category, ride_plan_date, ride_plan_time, date_fuzzy, possible_dates, request_origin, request_destination, raw_message')
+        supabase.from('v3_requests').select('id, source_group, source_contact, sender_name, request_type, request_category, ride_plan_date, ride_plan_time, date_fuzzy, possible_dates, request_origin, request_destination, raw_message, created_at')
             .eq('request_category', 'ride')
             .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
             .order('created_at', { ascending: false }),
@@ -511,7 +525,7 @@ function renderMatchCard(match, digestKey) {
     parts.push('    <div class="match-person-name">' + escHtml(needName) + '</div>');
     parts.push('    <div class="match-person-phone">' + escHtml(needPhone) + '</div>');
     if (need.raw_message) {
-        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(need.raw_message) + '&rdquo;</div>');
+        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(need.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatRelativeTime(need.created_at)) + '</span></div>');
     }
     parts.push('    <div class="pre-msg">' + escHtml(riderMsg) + '</div>');
     if (needDigits) {
@@ -525,7 +539,7 @@ function renderMatchCard(match, digestKey) {
     parts.push('    <div class="match-person-name">' + escHtml(offerName) + '</div>');
     parts.push('    <div class="match-person-phone">' + escHtml(offerPhone) + '</div>');
     if (offer.raw_message) {
-        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(offer.raw_message) + '&rdquo;</div>');
+        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(offer.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatRelativeTime(offer.created_at)) + '</span></div>');
     }
     parts.push('    <div class="pre-msg">' + escHtml(driverMsg) + '</div>');
     if (offerDigits) {
@@ -564,7 +578,7 @@ function renderClusterCard(cluster, digestKey) {
         parts.push('    <div class="match-person-phone">' + escHtml(phone) + '</div>');
         parts.push('    <div class="cluster-group-name" style="font-size:12px;color:#999;">' + escHtml(groupName) + '</div>');
         if (person.raw_message) {
-            parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(person.raw_message) + '&rdquo;</div>');
+            parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(person.raw_message) + '&rdquo; <span class="msg-time">' + escHtml(formatRelativeTime(person.created_at)) + '</span></div>');
         }
         parts.push('    <div class="pre-msg">' + escHtml(msg) + '</div>');
         if (digits) {
@@ -779,6 +793,7 @@ app.get('/digest', async function(req, res) {
             '  .match-person-name { font-size: 15px; font-weight: 600; }',
             '  .match-person-phone { font-size: 14px; color: #555; }',
             '  .match-person-msg { font-size: 13px; color: #888; font-style: italic; margin-top: 6px; word-break: break-word; }',
+            '  .msg-time { font-style: normal; color: #bbb; font-size: 11px; margin-left: 4px; }',
             '',
             '  .pre-msg { background: #f0f0f0; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px; font-size: 13px; margin-top: 8px; white-space: pre-wrap; word-break: break-word; color: #444; }',
             '',
