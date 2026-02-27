@@ -127,18 +127,19 @@ function generateSameWayMessage(person, cluster) {
 
 // ── Cluster Logic (from dashboard3) ───────────────────────────────────────
 
-function datesOverlap(a, b) {
+function datesOverlap(a, b, strict) {
     if (!a.ride_plan_date && !b.ride_plan_date) return true;
-    if (!a.ride_plan_date || !b.ride_plan_date) return true;
+    if (!a.ride_plan_date || !b.ride_plan_date) return !strict;
     if (a.ride_plan_date === b.ride_plan_date) return true;
     if (a.date_fuzzy && (a.possible_dates || []).includes(b.ride_plan_date)) return true;
     if (b.date_fuzzy && (b.possible_dates || []).includes(a.ride_plan_date)) return true;
+    if (strict) return false;
     const da = new Date(a.ride_plan_date);
     const db = new Date(b.ride_plan_date);
     return Math.abs((da - db) / 86400000) <= 1;
 }
 
-function buildClusters(requests) {
+function buildClusters(requests, strict) {
     var byRoute = {};
     for (var i = 0; i < requests.length; i++) {
         var r = requests[i];
@@ -160,7 +161,7 @@ function buildClusters(requests) {
             assigned[a] = idx;
             for (var b = a + 1; b < members.length; b++) {
                 if (assigned[b] !== -1) continue;
-                if (datesOverlap(members[a], members[b])) assigned[b] = idx;
+                if (datesOverlap(members[a], members[b], strict)) assigned[b] = idx;
             }
             idx++;
         }
@@ -435,7 +436,7 @@ async function fetchSameWayClusters() {
         allReqs[ri].groupName = groupMap.get(allReqs[ri].source_group) || allReqs[ri].source_group || 'Unknown Group';
     }
 
-    var clusters = buildClusters(allReqs);
+    var clusters = buildClusters(allReqs, true);
 
     // Return only clusters with 2+ people looking for rides
     return clusters.filter(function(c) { return c.needs.length >= 2; });
