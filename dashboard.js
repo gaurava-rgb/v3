@@ -373,6 +373,9 @@ async function fetchOpenMatches(showAll) {
         if (need.source_group && testGroups.has(need.source_group)) continue;
         if (offer.source_group && testGroups.has(offer.source_group)) continue;
 
+        // Skip matches where both dates are known but different
+        if (need.ride_plan_date && offer.ride_plan_date && need.ride_plan_date !== offer.ride_plan_date) continue;
+
         var resolveGroup = function(sg) {
             if (!sg) return 'Unknown Group';
             return groupMap.get(sg) || sg;
