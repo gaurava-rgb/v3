@@ -10,7 +10,9 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
+app.use(express.json());
 const PORT = process.env.DASHBOARD_PORT || 3004;
+const DIGEST_KEY = process.env.DIGEST_KEY || '';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // ── Utilities ─────────────────────────────────────────────────────────────
@@ -64,10 +66,54 @@ function formatDate(d) {
 
 function formatTime(t) {
     if (!t) return '';
-    const [h, m] = t.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
+    var parts = t.split(':').map(Number);
+    var h = parts[0] || 0;
+    var m = parts[1] || 0;
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 || 12;
     return h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+}
+
+// ── Digest Utilities ─────────────────────────────────────────────────────
+
+function digestFormatPhone(contact) {
+    if (!contact) return 'Unknown';
+    var digits = String(contact).replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('1')) {
+        return '+1 ' + digits.slice(1, 4) + '-' + digits.slice(4, 7) + '-' + digits.slice(7);
+    }
+    if (digits.length === 10) {
+        return '+1 ' + digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+    }
+    return '+' + digits;
+}
+
+function digestFirstName(name) {
+    if (!name) return 'there';
+    return String(name).trim().split(/\s+/)[0];
+}
+
+function phoneDigitsOnly(contact) {
+    if (!contact) return '';
+    var digits = String(contact).replace(/\D/g, '');
+    if (digits.length === 10) return '1' + digits;
+    return digits;
+}
+
+function generateRiderMessage(need, offer) {
+    var dest = need.request_destination || offer.request_destination || 'your destination';
+    var dateStr = offer.ride_plan_date ? formatDate(offer.ride_plan_date) : 'soon';
+    var timeStr = offer.ride_plan_time ? ' around ' + formatTime(offer.ride_plan_time) : '';
+    return 'Hey! Someone\u2019s offering a ride to ' + dest + ' ' + dateStr + timeStr +
+        '. Interested? Let me know and I\u2019ll connect you both \uD83D\uDE42';
+}
+
+function generateDriverMessage(need, offer) {
+    var dest = offer.request_destination || need.request_destination || 'your destination';
+    var dateStr = need.ride_plan_date ? formatDate(need.ride_plan_date) : 'soon';
+    var timeStr = need.ride_plan_time ? ' around ' + formatTime(need.ride_plan_time) : '';
+    return 'Hey! Someone needs a ride to ' + dest + ' ' + dateStr + timeStr +
+        ' \u2014 same as you. Want me to connect you both? \uD83D\uDE42';
 }
 
 // ── Cluster Logic (from dashboard3) ───────────────────────────────────────
@@ -256,6 +302,184 @@ async function getBoardData() {
     };
 }
 
+// ── Digest Data ──────────────────────────────────────────────────────────
+
+async function fetchOpenMatches(showAll) {
+    var matchQuery = supabase
+        .from('v3_matches')
+        .select('id, need_id, offer_id, score, match_quality, notified, created_at')
+        .order('created_at', { ascending: false });
+
+    if (!showAll) {
+        matchQuery = matchQuery.eq('notified', false);
+    }
+
+    var matchResult = await matchQuery;
+    if (matchResult.error) throw new Error('Failed to fetch matches: ' + matchResult.error.message);
+    var matches = matchResult.data || [];
+    if (matches.length === 0) return [];
+
+    var idSet = new Set();
+    for (var i = 0; i < matches.length; i++) {
+        idSet.add(matches[i].need_id);
+        idSet.add(matches[i].offer_id);
+    }
+    var requestIds = Array.from(idSet);
+
+    var reqResult = await supabase
+        .from('v3_requests')
+        .select('id, source_group, source_contact, sender_name, request_type, ride_plan_date, ride_plan_time, request_origin, request_destination, raw_message')
+        .in('id', requestIds);
+    if (reqResult.error) throw new Error('Failed to fetch requests: ' + reqResult.error.message);
+
+    var groupResult = await supabase
+        .from('monitored_groups')
+        .select('group_id, group_name, is_test');
+
+    var groupMap = new Map();
+    var testGroups = new Set();
+    var groups = (groupResult.data || []);
+    for (var gi = 0; gi < groups.length; gi++) {
+        groupMap.set(groups[gi].group_id, groups[gi].group_name);
+        if (groups[gi].is_test) {
+            testGroups.add(groups[gi].group_id);
+            if (groups[gi].group_name) testGroups.add(groups[gi].group_name);
+        }
+    }
+
+    var requestMap = new Map();
+    var requests = reqResult.data || [];
+    for (var ri = 0; ri < requests.length; ri++) {
+        requestMap.set(requests[ri].id, requests[ri]);
+    }
+
+    var enriched = [];
+    for (var mi = 0; mi < matches.length; mi++) {
+        var m = matches[mi];
+        var need = requestMap.get(m.need_id);
+        var offer = requestMap.get(m.offer_id);
+        if (!need || !offer) continue;
+
+        if (need.source_group && testGroups.has(need.source_group)) continue;
+        if (offer.source_group && testGroups.has(offer.source_group)) continue;
+
+        var resolveGroup = function(sg) {
+            if (!sg) return 'Unknown Group';
+            return groupMap.get(sg) || sg;
+        };
+
+        enriched.push({
+            matchId: m.id,
+            matchQuality: m.match_quality,
+            score: m.score,
+            notified: m.notified,
+            createdAt: m.created_at,
+            need: Object.assign({}, need, { groupName: resolveGroup(need.source_group) }),
+            offer: Object.assign({}, offer, { groupName: resolveGroup(offer.source_group) })
+        });
+    }
+
+    return enriched;
+}
+
+async function markNotified(matchIds) {
+    if (!matchIds || matchIds.length === 0) return;
+    var result = await supabase
+        .from('v3_matches')
+        .update({ notified: true })
+        .in('id', matchIds);
+    if (result.error) {
+        throw new Error('Failed to mark notified: ' + result.error.message);
+    }
+}
+
+function digestAuth(req, res) {
+    if (!DIGEST_KEY) {
+        res.status(500).send('DIGEST_KEY not configured');
+        return false;
+    }
+    if (req.query.key !== DIGEST_KEY) {
+        res.status(403).send('Forbidden');
+        return false;
+    }
+    return true;
+}
+
+function renderMatchCard(match, digestKey) {
+    var need = match.need;
+    var offer = match.offer;
+
+    var needName = need.sender_name || need.source_contact || 'Unknown';
+    var offerName = offer.sender_name || offer.source_contact || 'Unknown';
+    var needPhone = digestFormatPhone(need.source_contact);
+    var offerPhone = digestFormatPhone(offer.source_contact);
+    var needDigits = phoneDigitsOnly(need.source_contact);
+    var offerDigits = phoneDigitsOnly(offer.source_contact);
+
+    var date = need.ride_plan_date || offer.ride_plan_date;
+    var origin = need.request_origin || offer.request_origin || '?';
+    var dest = need.request_destination || offer.request_destination || '?';
+
+    var qualityEmoji = { strong: '\uD83D\uDFE2', medium: '\uD83D\uDFE1', low: '\uD83D\uDD34' }[match.matchQuality] || '\u26AA';
+
+    var riderMsg = generateRiderMessage(need, offer);
+    var driverMsg = generateDriverMessage(need, offer);
+
+    var groupLine;
+    if (need.groupName === offer.groupName) {
+        groupLine = 'Same group: ' + escHtml(need.groupName);
+    } else {
+        groupLine = escHtml(need.groupName) + ' / ' + escHtml(offer.groupName);
+    }
+
+    var handledClass = match.notified ? ' handled' : '';
+    var handledBadge = match.notified ? ' <span class="handled-badge">Handled</span>' : '';
+    var markBtn = !match.notified
+        ? '<button class="btn btn-mark" onclick="markHandled(\'' + match.matchId + '\')">Mark Handled</button>'
+        : '';
+
+    var dateLabel = date ? formatDate(date) : 'Flexible date';
+
+    var parts = [];
+    parts.push('<div class="match-card' + handledClass + '" id="match-' + match.matchId + '">');
+    parts.push('  <div class="match-date">' + escHtml(dateLabel) + '</div>');
+    parts.push('  <div class="match-route">' + escHtml(origin) + ' &rarr; ' + escHtml(dest) + handledBadge + '</div>');
+    parts.push('  <div class="match-quality">' + qualityEmoji + ' ' + escHtml(match.matchQuality) + '</div>');
+    parts.push('  <div class="match-group">' + groupLine + '</div>');
+
+    // Need person
+    parts.push('  <div class="match-person">');
+    parts.push('    <div class="match-person-label">\uD83D\uDC4B Looking for a ride</div>');
+    parts.push('    <div class="match-person-name">' + escHtml(needName) + '</div>');
+    parts.push('    <div class="match-person-phone">' + escHtml(needPhone) + '</div>');
+    if (need.raw_message) {
+        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(need.raw_message) + '&rdquo;</div>');
+    }
+    parts.push('    <div class="pre-msg">' + escHtml(riderMsg) + '</div>');
+    if (needDigits) {
+        parts.push('    <a class="wa-link" href="https://wa.me/' + needDigits + '?text=' + encodeURIComponent(riderMsg) + '" target="_blank">\uD83D\uDCAC Message ' + escHtml(digestFirstName(need.sender_name)) + '</a>');
+    }
+    parts.push('  </div>');
+
+    // Offer person
+    parts.push('  <div class="match-person">');
+    parts.push('    <div class="match-person-label">\uD83D\uDE97 Offering a ride</div>');
+    parts.push('    <div class="match-person-name">' + escHtml(offerName) + '</div>');
+    parts.push('    <div class="match-person-phone">' + escHtml(offerPhone) + '</div>');
+    if (offer.raw_message) {
+        parts.push('    <div class="match-person-msg">&ldquo;' + escHtml(offer.raw_message) + '&rdquo;</div>');
+    }
+    parts.push('    <div class="pre-msg">' + escHtml(driverMsg) + '</div>');
+    if (offerDigits) {
+        parts.push('    <a class="wa-link" href="https://wa.me/' + offerDigits + '?text=' + encodeURIComponent(driverMsg) + '" target="_blank">\uD83D\uDCAC Message ' + escHtml(digestFirstName(offer.sender_name)) + '</a>');
+    }
+    parts.push('  </div>');
+
+    parts.push('  ' + markBtn);
+    parts.push('</div>');
+    return parts.join('\n');
+}
+
 // ── Route ─────────────────────────────────────────────────────────────────
 
 app.get('/', async function(req, res) {
@@ -394,6 +618,185 @@ app.get('/', async function(req, res) {
         res.status(500).send('Error loading dashboard');
     }
 });
+
+// ── Digest Routes ────────────────────────────────────────────────────────
+
+app.get('/digest', async function(req, res) {
+    if (!digestAuth(req, res)) return;
+
+    try {
+        var showAll = req.query.show === 'all';
+        var matches = await fetchOpenMatches(showAll);
+        var unhandledCount = matches.filter(function(m) { return !m.notified; }).length;
+        var KEY = req.query.key;
+
+        var cardsHtml;
+        if (matches.length === 0) {
+            cardsHtml = '<div class="empty-state"><div class="check">&#x2705;</div>All clear! No unnotified matches.</div>';
+        } else {
+            cardsHtml = matches.map(function(m) { return renderMatchCard(m, KEY); }).join('\n');
+        }
+
+        var toggleHref = '/digest?key=' + encodeURIComponent(KEY) + (showAll ? '' : '&show=all');
+        var toggleLabel = showAll ? 'Show Unhandled Only' : 'Show All';
+
+        var markAllBtn = unhandledCount > 0
+            ? '<button class="btn btn-mark-all" onclick="markAll()">Mark All Handled</button>'
+            : '';
+
+        var html = [
+            '<!DOCTYPE html>',
+            '<html lang="en">',
+            '<head>',
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            '<title>Admin Digest</title>',
+            '<style>',
+            '  * { margin: 0; padding: 0; box-sizing: border-box; }',
+            '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #1a1a1a; line-height: 1.6; }',
+            '  .container { max-width: 720px; margin: 0 auto; padding: 32px 16px; }',
+            '',
+            '  .digest-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }',
+            '  .digest-header h1 { font-size: 22px; font-weight: 700; }',
+            '  .digest-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }',
+            '',
+            '  .match-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 18px; margin-bottom: 14px; }',
+            '  .match-card.handled { opacity: 0.5; }',
+            '  .match-date { font-size: 13px; color: #888; margin-bottom: 2px; }',
+            '  .match-route { font-size: 17px; font-weight: 600; margin-bottom: 4px; }',
+            '  .match-quality { font-size: 13px; margin-bottom: 4px; }',
+            '  .match-group { font-size: 13px; color: #666; margin-bottom: 14px; }',
+            '',
+            '  .match-person { background: #f9f9f9; border-radius: 8px; padding: 14px; margin-bottom: 10px; }',
+            '  .match-person-label { font-size: 12px; font-weight: 600; color: #888; margin-bottom: 6px; }',
+            '  .match-person-name { font-size: 15px; font-weight: 600; }',
+            '  .match-person-phone { font-size: 14px; color: #555; }',
+            '  .match-person-msg { font-size: 13px; color: #888; font-style: italic; margin-top: 6px; word-break: break-word; }',
+            '',
+            '  .pre-msg { background: #f0f0f0; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px; font-size: 13px; margin-top: 8px; white-space: pre-wrap; word-break: break-word; color: #444; }',
+            '',
+            '  .wa-link { display: inline-block; background: #25D366; color: #fff; text-decoration: none; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 8px; }',
+            '  .wa-link:active { background: #1da851; }',
+            '',
+            '  .btn { display: inline-block; padding: 8px 16px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; color: #555; }',
+            '  .btn-mark { color: #16a34a; border-color: #16a34a; background: #fff; }',
+            '  .btn-mark:active { background: #f0fdf4; }',
+            '  .btn-mark-all { color: #fff; background: #16a34a; border-color: #16a34a; }',
+            '',
+            '  .handled-badge { display: inline-block; background: #e8e8e8; color: #888; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; font-weight: 400; }',
+            '',
+            '  .empty-state { text-align: center; padding: 48px 16px; color: #aaa; font-size: 16px; }',
+            '  .empty-state .check { font-size: 48px; margin-bottom: 12px; }',
+            '',
+            '  .footer { text-align: center; font-size: 11px; color: #bbb; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e8e8e8; }',
+            '',
+            '  @media (max-width: 480px) {',
+            '    .container { padding: 20px 12px; }',
+            '    .digest-header { flex-direction: column; align-items: flex-start; }',
+            '    .match-card { padding: 14px; }',
+            '  }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '<div class="container">',
+            '',
+            '  <div class="digest-header">',
+            '    <h1>Admin Digest &mdash; ' + unhandledCount + ' open match' + (unhandledCount !== 1 ? 'es' : '') + '</h1>',
+            '    <div class="digest-actions">',
+            '      ' + markAllBtn,
+            '      <a class="btn" href="' + escHtml(toggleHref) + '">' + toggleLabel + '</a>',
+            '    </div>',
+            '  </div>',
+            '',
+            '  ' + cardsHtml,
+            '',
+            '  <div class="footer">Admin Digest &middot; v3.1</div>',
+            '',
+            '</div>',
+            '<script>',
+            '  var DIGEST_KEY = "' + KEY + '";',
+            '',
+            '  async function markHandled(matchId) {',
+            '    var btn = event.target;',
+            '    btn.disabled = true;',
+            '    btn.textContent = "Marking...";',
+            '    try {',
+            '      var resp = await fetch("/digest/mark?key=" + DIGEST_KEY, {',
+            '        method: "POST",',
+            '        headers: { "Content-Type": "application/json" },',
+            '        body: JSON.stringify({ matchId: matchId })',
+            '      });',
+            '      if (!resp.ok) throw new Error("Failed");',
+            '      var card = document.getElementById("match-" + matchId);',
+            '      card.classList.add("handled");',
+            '      btn.textContent = "Handled";',
+            '      updateCount(-1);',
+            '    } catch (e) {',
+            '      btn.disabled = false;',
+            '      btn.textContent = "Mark Handled";',
+            '    }',
+            '  }',
+            '',
+            '  async function markAll() {',
+            '    var cards = document.querySelectorAll(".match-card:not(.handled)");',
+            '    var ids = [];',
+            '    cards.forEach(function(c) { ids.push(c.id.replace("match-", "")); });',
+            '    if (ids.length === 0) return;',
+            '    if (!confirm("Mark all " + ids.length + " matches as handled?")) return;',
+            '    try {',
+            '      var resp = await fetch("/digest/mark?key=" + DIGEST_KEY, {',
+            '        method: "POST",',
+            '        headers: { "Content-Type": "application/json" },',
+            '        body: JSON.stringify({ matchIds: ids })',
+            '      });',
+            '      if (!resp.ok) throw new Error("Failed");',
+            '      cards.forEach(function(c) { c.classList.add("handled"); });',
+            '      document.querySelectorAll(".btn-mark").forEach(function(b) { b.textContent = "Handled"; b.disabled = true; });',
+            '      updateCount(-ids.length);',
+            '    } catch (e) {',
+            '      alert("Failed to mark all as handled");',
+            '    }',
+            '  }',
+            '',
+            '  function updateCount(delta) {',
+            '    var h1 = document.querySelector(".digest-header h1");',
+            '    var match = h1.textContent.match(/(\\d+)/);',
+            '    if (match) {',
+            '      var n = Math.max(0, parseInt(match[1]) + delta);',
+            '      h1.textContent = "Admin Digest \\u2014 " + n + " open match" + (n !== 1 ? "es" : "");',
+            '    }',
+            '  }',
+            '',
+            '  setTimeout(function() { location.reload(); }, 5 * 60 * 1000);',
+            '</script>',
+            '</body>',
+            '</html>'
+        ].join('\n');
+
+        res.send(html);
+    } catch (err) {
+        console.error('[Dashboard/Digest] Error:', err.message);
+        res.status(500).send('Error loading digest');
+    }
+});
+
+app.post('/digest/mark', async function(req, res) {
+    if (!digestAuth(req, res)) return;
+
+    try {
+        var matchIds = req.body.matchIds || (req.body.matchId ? [req.body.matchId] : []);
+        if (matchIds.length === 0) {
+            return res.status(400).json({ error: 'No matchIds provided' });
+        }
+        await markNotified(matchIds);
+        res.json({ success: true, marked: matchIds.length });
+    } catch (err) {
+        console.error('[Dashboard/Digest] Mark error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Start ─────────────────────────────────────────────────────────────────
 
 app.listen(PORT, '0.0.0.0', function() {
     console.log('[Dashboard] v3.1 running at http://localhost:' + PORT);

@@ -29,16 +29,6 @@ module.exports = {
             watch: false,
             env: { NODE_ENV: 'production', TZ: 'America/Chicago' },
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
-        },
-        {
-            name: 'aggie-digest',
-            script: 'digest.js',
-            restart_delay: 10000,
-            max_restarts: 10,
-            autorestart: true,
-            watch: false,
-            env: { NODE_ENV: 'production', TZ: 'America/Chicago' },
-            log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
         }
     ]
 };
