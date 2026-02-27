@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "aggie-v3-bot",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["bot.js"],
+      "port": 0
+    },
+    {
+      "name": "aggie-v3-dash",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["dashboard.js"],
+      "port": 3004
+    },
+    {
+      "name": "aggie-v3-monitor",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["monitor.js"],
+      "port": 3005
+    },
+    {
+      "name": "aggie-digest",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["digest.js"],
+      "port": 3010
+    }
+  ]
+}
