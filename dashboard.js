@@ -284,7 +284,7 @@ async function getBoardData() {
     var weekRows = results[2].data || [];
     var todayRows = results[3].data || [];
 
-    var clusters = buildClusters(allReqs);
+    var clusters = buildClusters(allReqs, true);
 
     var byDate = {};
     for (var i = 0; i < clusters.length; i++) {
