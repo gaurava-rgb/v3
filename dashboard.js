@@ -389,6 +389,12 @@ async function fetchOpenMatches(showAll) {
         });
     }
 
+    enriched.sort(function(a, b) {
+        var da = a.need.ride_plan_date || a.offer.ride_plan_date || '9999';
+        var db = b.need.ride_plan_date || b.offer.ride_plan_date || '9999';
+        return da.localeCompare(db);
+    });
+
     return enriched;
 }
 
