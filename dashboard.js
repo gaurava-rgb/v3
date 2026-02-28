@@ -208,52 +208,6 @@ function buildClusters(requests, strict) {
     return clusters;
 }
 
-// ── Render helpers ────────────────────────────────────────────────────────
-
-function renderRouteCard(c) {
-    var offerCount = c.offers.length;
-    var needCount = c.needs.length;
-    var parts = [];
-
-    parts.push('<div class="route-card">');
-    parts.push('<span class="route-name">' + escHtml(c.origin) + ' &rarr; ' + escHtml(c.destination) + '</span>');
-
-    if (offerCount > 0) {
-        var oNames = c.offers.map(function(o) { return escHtml(displayName(o)); }).join(', ');
-        var times = c.offers.map(function(o) { return o.ride_plan_time ? formatTime(o.ride_plan_time) : null; }).filter(Boolean);
-        var timeStr = times.length > 0 ? ' (' + escHtml(times.join(', ')) + ')' : '';
-        var verb = offerCount === 1 ? 'offering a ride' : 'offering rides';
-        parts.push('<div class="route-offer">&#x1F697; ' + offerCount + ' ' + verb + timeStr + ' <span class="names">&mdash; ' + oNames + '</span></div>');
-    }
-
-    if (needCount > 0) {
-        var nNames = c.needs.map(function(n) { return escHtml(displayName(n)); }).join(', ');
-        var nverb = needCount === 1 ? 'looking for a ride' : 'looking for rides';
-        parts.push('<div class="route-needs">&#x1F44B; ' + needCount + ' ' + nverb + ' <span class="names">&mdash; ' + nNames + '</span></div>');
-    }
-
-    if (c.hasOffer && needCount > 0) {
-        parts.push('<div class="route-status status-match">&#x1F7E2; Going the same way</div>');
-    } else if (!c.hasOffer && needCount > 0) {
-        parts.push('<div class="route-status status-none">Nobody&#x2019;s driving as of now</div>');
-    }
-
-    parts.push('</div>');
-    return parts.join('\n');
-}
-
-function renderDateGroup(dateKey, dateClusters) {
-    var dateLabel = dateKey === 'flexible' ? 'Flexible Dates' : formatDate(dateKey);
-    var cards = dateClusters.map(renderRouteCard).join('\n');
-    return '<div class="date-group">\n<div class="date-label">' + escHtml(dateLabel) + '</div>\n' + cards + '\n</div>';
-}
-
-function renderOpportunity(c) {
-    var dateStr = c.repDate ? formatDate(c.repDate) : 'soon';
-    var count = c.needs.length;
-    var plural = count !== 1 ? 's' : '';
-    return '<div class="opportunity">' + count + ' student' + plural + ' heading to ' + escHtml(c.destination) + ' ' + escHtml(dateStr) + ' &mdash; no ride offered yet</div>';
-}
 
 // ── Mockup Layout Renderers ──────────────────────────────────────────────
 
@@ -425,74 +379,6 @@ function renderMockupDateBlock(dateKey, requests) {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────
-
-async function getBoardData() {
-    var today = new Date().toISOString().split('T')[0];
-
-    var results = await Promise.all([
-        supabase.from('v3_requests').select('*')
-            .eq('request_category', 'ride')
-            .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
-            .order('created_at', { ascending: false }),
-        supabase.from('monitored_groups').select('group_id, group_name, is_test').eq('active', true),
-        supabase.from('v3_requests').select('id')
-            .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
-        supabase.from('v3_requests').select('id')
-            .gte('created_at', today + 'T00:00:00')
-    ]);
-
-    // Exclude test groups from dashboard (uses is_test column)
-    // Filter set includes both group_id (JID) and group_name
-    // because migrated v2 data stored names, v3 stores JIDs
-    var allGroups = results[1].data || [];
-    var testGroupFilter = new Set();
-    var activeGroupIds = [];
-    for (var gi = 0; gi < allGroups.length; gi++) {
-        if (allGroups[gi].is_test) {
-            testGroupFilter.add(allGroups[gi].group_id);
-            if (allGroups[gi].group_name) {
-                testGroupFilter.add(allGroups[gi].group_name);
-            }
-        } else {
-            activeGroupIds.push(allGroups[gi]);
-        }
-    }
-
-    var rawReqs = results[0].data || [];
-    var allReqs = rawReqs.filter(function(r) {
-        return !r.source_group || !testGroupFilter.has(r.source_group);
-    });
-    var groupRows = activeGroupIds;
-    var weekRows = results[2].data || [];
-    var todayRows = results[3].data || [];
-
-    var clusters = buildClusters(allReqs, true);
-
-    var byDate = {};
-    for (var i = 0; i < clusters.length; i++) {
-        var key = clusters[i].repDate || 'flexible';
-        if (!byDate[key]) byDate[key] = [];
-        byDate[key].push(clusters[i]);
-    }
-
-    var sortedDates = Object.keys(byDate).sort(function(a, b) {
-        if (a === 'flexible') return 1;
-        if (b === 'flexible') return -1;
-        return a.localeCompare(b);
-    });
-
-    var opportunities = clusters.filter(function(c) { return !c.hasOffer && c.needs.length >= 2; });
-
-    return {
-        byDate: byDate,
-        sortedDates: sortedDates,
-        opportunities: opportunities,
-        totalGroups: groupRows.length,
-        weekCount: weekRows.length,
-        todayCount: todayRows.length,
-        totalRequests: allReqs.length
-    };
-}
 
 // ── Digest Data ──────────────────────────────────────────────────────────
 
@@ -761,13 +647,7 @@ function renderClusterCard(cluster, digestKey) {
 
 // ── Route ─────────────────────────────────────────────────────────────────
 
-// Temporary mockup route for layout preview
-app.get('/mockup', function(req, res) {
-    res.sendFile(require('path').join(__dirname, 'mockup.html'));
-});
-
-// ── Test route: mockup layout with real data ─────────────────────────────
-app.get('/test', async function(req, res) {
+app.get('/', async function(req, res) {
     try {
         var today = new Date().toISOString().split('T')[0];
 
@@ -812,7 +692,7 @@ app.get('/test', async function(req, res) {
             return a.localeCompare(b);
         });
 
-        // Render date blocks using mockup layout
+        // Render date blocks
         var dateBlocksHtml;
         if (sortedDates.length === 0) {
             dateBlocksHtml = '<div class="empty">No ride activity yet.</div>';
@@ -841,9 +721,17 @@ app.get('/test', async function(req, res) {
             '<!DOCTYPE html>',
             '<html lang="en">',
             '<head>',
+            '<!-- Google tag (gtag.js) -->',
+            '<script async src="https://www.googletagmanager.com/gtag/js?id=G-PT7Y07LEPC"></script>',
+            '<script>',
+            '  window.dataLayer = window.dataLayer || [];',
+            '  function gtag(){dataLayer.push(arguments);}',
+            "  gtag('js', new Date());",
+            "  gtag('config', 'G-PT7Y07LEPC');",
+            '</script>',
             '<meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1">',
-            '<title>Aggie Connect — Test Mockup Layout</title>',
+            '<title>Aggie Connect</title>',
             '<style>' + css + '</style>',
             '</head>',
             '<body>',
@@ -860,150 +748,13 @@ app.get('/test', async function(req, res) {
             '    <div class="clock"><span id="live-time"></span> CT</div>',
             '  </div>',
             dateBlocksHtml,
-            '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; v3.2-mockup</div>',
+            '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; v3.2</div>',
             '</div>',
             '<script>',
             '(function() {',
             '  function updateClock() {',
             '    var now = new Date();',
             '    var opts = { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" };',
-            '    var el = document.getElementById("live-time");',
-            '    if (el) el.textContent = now.toLocaleTimeString("en-US", opts);',
-            '  }',
-            '  updateClock();',
-            '  setInterval(updateClock, 30000);',
-            '})()',
-            '</script>',
-            '</body>',
-            '</html>'
-        ].join('\n');
-
-        res.send(html);
-    } catch (err) {
-        console.error('Test route error:', err);
-        res.status(500).send('Error: ' + err.message);
-    }
-});
-
-app.get('/', async function(req, res) {
-    try {
-        var data = await getBoardData();
-
-        var boardHtml;
-        if (data.sortedDates.length === 0) {
-            boardHtml = '<div class="empty">No ride activity this week yet. The bot is monitoring groups and will show activity here as requests come in.</div>';
-        } else {
-            boardHtml = data.sortedDates.map(function(dk) {
-                return renderDateGroup(dk, data.byDate[dk]);
-            }).join('\n');
-        }
-
-        var oppsHtml = '';
-        if (data.opportunities.length > 0) {
-            oppsHtml = '<div class="section">\n<div class="section-header">Opportunities</div>\n' +
-                data.opportunities.map(renderOpportunity).join('\n') +
-                '\n</div>';
-        }
-
-        var activityMsg;
-        if (data.todayCount > 0) {
-            activityMsg = 'Saw <strong>' + data.todayCount + '</strong> ride request' + (data.todayCount !== 1 ? 's' : '') + ' today across <strong>' + data.totalGroups + '</strong> groups';
-        } else {
-            activityMsg = 'Monitoring <strong>' + data.totalGroups + '</strong> WhatsApp group' + (data.totalGroups !== 1 ? 's' : '') + ' for ride requests';
-        }
-
-        var weekLabel = data.weekCount + ' ride request' + (data.weekCount !== 1 ? 's' : '');
-        var groupLabel = data.totalGroups + ' WhatsApp group' + (data.totalGroups !== 1 ? 's' : '');
-
-        var html = [
-            '<!DOCTYPE html>',
-            '<html lang="en">',
-            '<head>',
-            '<!-- Google tag (gtag.js) -->',
-            '<script async src="https://www.googletagmanager.com/gtag/js?id=G-PT7Y07LEPC"></script>',
-            '<script>',
-            '  window.dataLayer = window.dataLayer || [];',
-            '  function gtag(){dataLayer.push(arguments);}',
-            "  gtag('js', new Date());",
-            "  gtag('config', 'G-PT7Y07LEPC');",
-            '</script>',
-            '<meta charset="utf-8">',
-            '<meta name="viewport" content="width=device-width, initial-scale=1">',
-            '<title>Aggie Connect</title>',
-            '<style>',
-            '  * { margin: 0; padding: 0; box-sizing: border-box; }',
-            '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #1a1a1a; line-height: 1.6; }',
-            '  .container { max-width: 720px; margin: 0 auto; padding: 32px 16px; }',
-            '',
-            '  .hero { text-align: center; margin-bottom: 40px; position: relative; }',
-            '  .hero h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }',
-            '  .hero .subtitle { font-size: 15px; color: #666; }',
-            '  .hero .subtitle strong { color: #1a1a1a; }',
-            '  .clock { position: absolute; top: 0; right: 0; text-align: right; font-size: 13px; color: #999; line-height: 1.3; }',
-            '  .clock .time { font-size: 15px; font-weight: 600; color: #555; }',
-            '',
-            '  .section { margin-bottom: 36px; }',
-            '  .section-header { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #999; margin-bottom: 16px; }',
-            '',
-            '  .date-group { margin-bottom: 24px; }',
-            '  .date-label { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 10px; padding: 8px 0 6px; border-bottom: 1px solid #e5e5e5; position: sticky; top: 0; background: #fafafa; z-index: 10; }',
-            '',
-            '  .route-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 16px 18px; margin-bottom: 10px; }',
-            '  .route-name { font-size: 16px; font-weight: 600; display: block; margin-bottom: 8px; }',
-            '  .route-offer { font-size: 14px; color: #333; margin-bottom: 4px; }',
-            '  .route-needs { font-size: 14px; color: #333; margin-bottom: 4px; }',
-            '  .names { color: #999; font-size: 13px; }',
-            '  .route-status { font-size: 13px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0; }',
-            '  .status-match { color: #16a34a; }',
-            '  .status-none { color: #9ca3af; font-style: italic; }',
-            '',
-            '  .opportunity { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; font-size: 14px; color: #92400e; }',
-            '',
-            '  .activity { text-align: center; font-size: 14px; color: #888; padding: 16px; background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; }',
-            '  .activity strong { color: #333; }',
-            '',
-            '  .footer { text-align: center; font-size: 11px; color: #bbb; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e8e8e8; }',
-            '',
-            '  .empty { text-align: center; color: #aaa; font-size: 14px; padding: 32px 16px; }',
-            '',
-            '  @media (max-width: 480px) {',
-            '    .container { padding: 20px 12px; }',
-            '    .hero h1 { font-size: 24px; }',
-            '    .route-card { padding: 14px; }',
-            '    .clock { position: static; text-align: center; margin-bottom: 12px; }',
-            '  }',
-            '</style>',
-            '</head>',
-            '<body>',
-            '<div class="container">',
-            '',
-            '  <div class="hero">',
-            '    <div class="clock"><span class="time" id="live-time"></span><br>Central Time</div>',
-            '    <h1>Aggie Connect</h1>',
-            '    <p class="subtitle">Tracking <strong>' + weekLabel + '</strong> across <strong>' + groupLabel + '</strong> this week</p>',
-            '  </div>',
-            '',
-            '  <div class="section">',
-            '    <div class="section-header">Going the Same Way</div>',
-            '    ' + boardHtml,
-            '  </div>',
-            '',
-            oppsHtml,
-            '',
-            '  <div class="section">',
-            '    <div class="activity">' + activityMsg + '</div>',
-            '  </div>',
-            '',
-            '  <div class="footer">',
-            '    ' + data.totalRequests + ' total requests &middot; ' + data.totalGroups + ' groups monitored &middot; v3.1',
-            '  </div>',
-            '',
-            '</div>',
-            '<script>',
-            '(function() {',
-            '  function updateClock() {',
-            '    var now = new Date();',
-            '    var opts = { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" };',
             '    var el = document.getElementById("live-time");',
             '    if (el) el.textContent = now.toLocaleTimeString("en-US", opts);',
             '  }',
