@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aggie Connect — Mockup v3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #1a1a1a; line-height: 1.45; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 20px 16px; }
+
+  .hero { text-align: center; margin-bottom: 16px; }
+  .hero h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .hero .subtitle { font-size: 13px; color: #666; margin-top: 2px; }
+  .hero .subtitle strong { color: #1a1a1a; }
+
+  .legend {
+    display: flex; gap: 20px; align-items: center;
+    font-size: 14px; font-weight: 600; color: #555;
+    padding: 8px 0; margin-bottom: 8px;
+    position: sticky; top: 0; background: #fafafa; z-index: 20;
+    border-bottom: 1px solid #e8e8e8;
+  }
+  .legend-left { display: flex; gap: 20px; flex: 1; justify-content: center; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .legend-dot.need { background: #f59e0b; }
+  .legend-dot.offer { background: #22c55e; }
+  .clock { font-size: 12px; font-weight: 600; color: #888; white-space: nowrap; }
+
+  /* ── Date block ─────────────────────── */
+  .date-block { margin-bottom: 20px; }
+  .date-label {
+    font-size: 14px; font-weight: 700; color: #333;
+    padding: 6px 0 4px; border-bottom: 2px solid #e0e0e0; margin-bottom: 8px;
+    position: sticky; top: 37px; background: #fafafa; z-index: 10;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .today-badge {
+    display: inline-block; background: #dcfce7; color: #16a34a;
+    font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
+  }
+  .date-summary {
+    margin-left: auto; font-size: 11px; font-weight: 400; color: #999;
+  }
+
+  /* ── Two-column: From CS / To CS ─────── */
+  .directions {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  @media (max-width: 600px) {
+    .directions { grid-template-columns: 1fr; }
+  }
+
+  .direction-col { min-width: 0; }
+  .direction-header {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 4px 8px; border-radius: 5px 5px 0 0;
+  }
+  .direction-header.from-cs { background: #dbeafe; color: #1d4ed8; }
+  .direction-header.to-cs { background: #dcfce7; color: #16a34a; }
+
+  .direction-body {
+    background: #fff; border: 1px solid #e5e5e5; border-top: none; border-radius: 0 0 6px 6px;
+  }
+
+  /* ── City section ───────────────────── */
+  .city-section { border-bottom: 1px solid #f0f0f0; }
+  .city-section:last-child { border-bottom: none; }
+
+  .city-header {
+    font-size: 12px; font-weight: 600; color: #555; padding: 6px 8px 2px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .city-count { font-size: 10px; color: #aaa; font-weight: 400; }
+
+  /* ── Person row ────────────────────── */
+  .person-row {
+    display: flex; align-items: baseline; gap: 6px;
+    padding: 3px 8px 3px 14px; font-size: 12px;
+  }
+  .person-row:last-child { padding-bottom: 6px; }
+
+  .type-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .type-dot.need { background: #f59e0b; }
+  .type-dot.offer { background: #22c55e; }
+
+  .person-name {
+    font-weight: 600; color: #333; white-space: nowrap; min-width: 60px;
+  }
+
+  .person-msg {
+    color: #888; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; min-width: 0;
+  }
+  .person-msg em { font-style: normal; color: #aaa; }
+
+  .person-meta {
+    font-size: 10px; color: #bbb; white-space: nowrap; flex-shrink: 0;
+  }
+
+  .match-row {
+    padding: 2px 8px 4px 14px;
+    font-size: 10px; color: #16a34a; font-weight: 600;
+  }
+
+  .empty-direction {
+    padding: 10px; text-align: center; color: #d4d4d4; font-size: 12px; font-style: italic;
+  }
+
+  /* ── Others section ─────────────────── */
+  .others-section { margin-top: 6px; }
+  .others-label {
+    font-size: 10px; font-weight: 600; color: #bbb; text-transform: uppercase;
+    letter-spacing: 0.3px; margin-bottom: 3px;
+  }
+  .others-body {
+    background: #fff; border: 1px solid #e5e5e5; border-radius: 6px;
+  }
+
+  .footer {
+    text-align: center; font-size: 10px; color: #ccc; margin-top: 24px;
+    padding-top: 12px; border-top: 1px solid #eee;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="hero">
+    <h1>Aggie Connect</h1>
+    <p class="subtitle">Tracking <strong>63 ride requests</strong> across <strong>15 WhatsApp groups</strong> this week</p>
+  </div>
+
+  <div class="legend">
+    <div class="legend-left">
+      <div class="legend-item"><span class="legend-dot need"></span> Looking for ride</div>
+      <div class="legend-item"><span class="legend-dot offer"></span> Offering ride</div>
+    </div>
+    <div class="clock"><span id="live-time"></span> CT</div>
+  </div>
+
+  <!-- ════════════════ TODAY ════════════════ -->
+  <div class="date-block">
+    <div class="date-label">
+      Fri, Feb 27 <span class="today-badge">Today</span>
+      <span class="date-summary">5 leaving · 4 arriving · 1 other</span>
+    </div>
+
+    <div class="directions">
+      <!-- FROM CS -->
+      <div class="direction-col">
+        <div class="direction-header from-cs">↑ Leaving College Station</div>
+        <div class="direction-body">
+          <div class="city-section">
+            <div class="city-header">To Houston <span class="city-count">3 people</span></div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">V</span>
+              <span class="person-msg">"need a ride to houston today"</span>
+              <span class="person-meta">3:15 PM</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">S*****i</span>
+              <span class="person-msg">"anyone going houston? can leave after 2"</span>
+              <span class="person-meta">1:42 PM</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">J*****i</span>
+              <span class="person-msg">"looking for ride CS to houston today or tmrw"</span>
+              <span class="person-meta">12:08 PM</span>
+            </div>
+          </div>
+          <div class="city-section">
+            <div class="city-header">To Austin <span class="city-count">2 people</span></div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">P*****a</span>
+              <span class="person-msg">"need ride to austin friday evening"</span>
+              <span class="person-meta">11:30 AM</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">91***3</span>
+              <span class="person-msg">"anyone going to aus today?"</span>
+              <span class="person-meta">10:55 AM</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TO CS -->
+      <div class="direction-col">
+        <div class="direction-header to-cs">↓ Coming to College Station</div>
+        <div class="direction-body">
+          <div class="city-section">
+            <div class="city-header">From Houston <span class="city-count">3 people</span></div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">~***</span>
+              <span class="person-msg">"driving houston to CS, leaving 3pm, 2 seats"</span>
+              <span class="person-meta">2:20 PM</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">J***</span>
+              <span class="person-msg">"leaving houston 5:30 back to cstat"</span>
+              <span class="person-meta">1:15 PM</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">19***7</span>
+              <span class="person-msg">"going back to CS from houston tonight"</span>
+              <span class="person-meta">11:02 AM</span>
+            </div>
+          </div>
+          <div class="city-section">
+            <div class="city-header">From Austin <span class="city-count">1 person</span></div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">N**i</span>
+              <span class="person-msg">"driving austin to CS around 5pm"</span>
+              <span class="person-meta">10:40 AM</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="others-section">
+      <div class="others-label">Others</div>
+      <div class="others-body">
+        <div class="person-row" style="padding: 6px 8px;">
+          <span class="type-dot need"></span>
+          <span class="person-name">S*****h</span>
+          <span class="person-msg">Scandia → 4952 Lakeway Dr · "need ride to fedex and back"</span>
+          <span class="person-meta">9:22 AM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ SAT FEB 28 ════════════════ -->
+  <div class="date-block">
+    <div class="date-label">
+      Sat, Feb 28
+      <span class="date-summary">4 leaving · 3 arriving</span>
+    </div>
+
+    <div class="directions">
+      <div class="direction-col">
+        <div class="direction-header from-cs">↑ Leaving College Station</div>
+        <div class="direction-body">
+          <div class="city-section">
+            <div class="city-header">To Houston <span class="city-count">2 people</span></div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">Shreya</span>
+              <span class="person-msg">"need ride to houston saturday morning"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">Jahnavi</span>
+              <span class="person-msg">"going to houston feb 28, anyone?"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+          </div>
+          <div class="city-section">
+            <div class="city-header">To Dallas <span class="city-count">2 people</span></div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">T*****r</span>
+              <span class="person-msg">"looking for ride to dallas this sat"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">H*****.</span>
+              <span class="person-msg">"need ride CS to DFW saturday"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="direction-col">
+        <div class="direction-header to-cs">↓ Coming to College Station</div>
+        <div class="direction-body">
+          <div class="city-section">
+            <div class="city-header">From Houston <span class="city-count">2 people</span></div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">A*****i</span>
+              <span class="person-msg">"need ride houston to cstat sat"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">D*****K</span>
+              <span class="person-msg">"anyone coming from houston saturday?"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+          </div>
+          <div class="city-section">
+            <div class="city-header">From Dallas <span class="city-count">1 person</span></div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">J*****i</span>
+              <span class="person-msg">"looking for ride from dallas to CS"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ SUN MAR 1 ════════════════ -->
+  <div class="date-block">
+    <div class="date-label">
+      Sun, Mar 1
+      <span class="date-summary">2 leaving</span>
+    </div>
+
+    <div class="directions">
+      <div class="direction-col">
+        <div class="direction-header from-cs">↑ Leaving College Station</div>
+        <div class="direction-body">
+          <div class="city-section">
+            <div class="city-header">To Houston <span class="city-count">2 people</span></div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">Jaineel</span>
+              <span class="person-msg">"driving to houston sunday 3pm, 3 seats"</span>
+              <span class="person-meta">Feb 27</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">A*****a</span>
+              <span class="person-msg">"need ride to houston on sunday"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="match-row">🟢 1 offer + 1 need — going the same way</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="direction-col">
+        <div class="direction-header to-cs">↓ Coming to College Station</div>
+        <div class="direction-body">
+          <div class="empty-direction">No rides posted</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ MON MAR 2 ════════════════ -->
+  <div class="date-block">
+    <div class="date-label">
+      Mon, Mar 2
+      <span class="date-summary">3 arriving</span>
+    </div>
+
+    <div class="directions">
+      <div class="direction-col">
+        <div class="direction-header from-cs">↑ Leaving College Station</div>
+        <div class="direction-body">
+          <div class="empty-direction">No rides posted</div>
+        </div>
+      </div>
+
+      <div class="direction-col">
+        <div class="direction-header to-cs">↓ Coming to College Station</div>
+        <div class="direction-body">
+          <div class="city-section">
+            <div class="city-header">From Dallas <span class="city-count">3 people</span></div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">G***a</span>
+              <span class="person-msg">"driving dallas to CS monday morning"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">T*****r</span>
+              <span class="person-msg">"need ride from dallas monday"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">S****i</span>
+              <span class="person-msg">"anyone coming from DFW to CS on monday?"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+            <div class="match-row">🟢 1 offer + 2 needs — going the same way</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ THU MAR 5 ════════════════ -->
+  <div class="date-block">
+    <div class="date-label">
+      Thu, Mar 5
+      <span class="date-summary">8 leaving</span>
+    </div>
+
+    <div class="directions">
+      <div class="direction-col">
+        <div class="direction-header from-cs">↑ Leaving College Station</div>
+        <div class="direction-body">
+          <div class="city-section">
+            <div class="city-header">To Houston <span class="city-count">8 people</span></div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">P*****r</span>
+              <span class="person-msg">"driving CS to houston 3pm, have room"</span>
+              <span class="person-meta">Feb 27</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">91***7</span>
+              <span class="person-msg">"offering ride to houston mar 5"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">19***7</span>
+              <span class="person-msg">"going to houston thursday, 2 spots"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">S****u</span>
+              <span class="person-msg">"need ride to houston mar 5"</span>
+              <span class="person-meta">Feb 27</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">S******a</span>
+              <span class="person-msg">"looking for ride CS to houston IAH thu"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">S*****a</span>
+              <span class="person-msg">"anyone going houston thursday?"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">19***6</span>
+              <span class="person-msg">"need ride houston march 5th"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">91***5</span>
+              <span class="person-msg">"looking for ride to houston next thu"</span>
+              <span class="person-meta">Feb 25</span>
+            </div>
+            <div class="match-row">🟢 3 offers + 5 needs — going the same way</div>
+          </div>
+          <div class="city-section">
+            <div class="city-header">To Austin <span class="city-count">2 people</span></div>
+            <div class="person-row">
+              <span class="type-dot offer"></span>
+              <span class="person-name">B*****a</span>
+              <span class="person-msg">"driving to austin 2:30pm mar 5"</span>
+              <span class="person-meta">Feb 27</span>
+            </div>
+            <div class="person-row">
+              <span class="type-dot need"></span>
+              <span class="person-name">A*****a</span>
+              <span class="person-msg">"need ride to austin thursday"</span>
+              <span class="person-meta">Feb 26</span>
+            </div>
+            <div class="match-row">🟢 1 offer + 1 need — going the same way</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="direction-col">
+        <div class="direction-header to-cs">↓ Coming to College Station</div>
+        <div class="direction-body">
+          <div class="empty-direction">No rides posted</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">63 total requests · 15 groups monitored · v3.1</div>
+
+</div>
+<script>
+(function() {
+  function updateClock() {
+    var now = new Date();
+    var opts = { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" };
+    var el = document.getElementById("live-time");
+    if (el) el.textContent = now.toLocaleTimeString("en-US", opts);
+  }
+  updateClock();
+  setInterval(updateClock, 30000);
+})()
+</script>
+</body>
+</html>

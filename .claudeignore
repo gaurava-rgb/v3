@@ -1,0 +1,4 @@
+archive/
+.specstory/
+node_modules/
+*.log

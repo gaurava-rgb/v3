@@ -255,6 +255,175 @@ function renderOpportunity(c) {
     return '<div class="opportunity">' + count + ' student' + plural + ' heading to ' + escHtml(c.destination) + ' ' + escHtml(dateStr) + ' &mdash; no ride offered yet</div>';
 }
 
+// ── Mockup Layout Renderers ──────────────────────────────────────────────
+
+function groupByDirection(requests) {
+    var collegeStation = 'College Station';
+    var leaving = [];  // origin = CS
+    var arriving = []; // destination = CS
+    var others = [];   // neither
+    
+    for (var i = 0; i < requests.length; i++) {
+        var r = requests[i];
+        var origin = r.request_origin || '';
+        var dest = r.request_destination || '';
+        
+        if (origin === collegeStation && dest !== collegeStation) {
+            leaving.push(r);
+        } else if (dest === collegeStation && origin !== collegeStation) {
+            arriving.push(r);
+        } else {
+            others.push(r);
+        }
+    }
+    
+    return { leaving: leaving, arriving: arriving, others: others };
+}
+
+function renderMockupPersonRow(req, isOffer) {
+    var typeClass = isOffer ? 'offer' : 'need';
+    var name = displayName(req);
+    var msg = req.raw_message ? escHtml(req.raw_message.slice(0, 60)) : '';
+    var time = req.ride_plan_time ? formatTime(req.ride_plan_time) : '';
+    var createdDate = req.created_at ? formatMsgTime(req.created_at) : '';
+    var meta = time || createdDate;
+    
+    return [
+        '<div class="person-row">',
+        '  <span class="type-dot ' + typeClass + '"></span>',
+        '  <span class="person-name">' + escHtml(name) + '</span>',
+        '  <span class="person-msg">' + msg + '</span>',
+        '  <span class="person-meta">' + escHtml(meta) + '</span>',
+        '</div>'
+    ].join('');
+}
+
+function renderMockupCitySection(city, requests, isLeaving) {
+    var offers = requests.filter(function(r) { return r.request_type === 'offer'; });
+    var needs = requests.filter(function(r) { return r.request_type === 'need'; });
+    var total = requests.length;
+    
+    var rows = [];
+    for (var i = 0; i < offers.length; i++) rows.push(renderMockupPersonRow(offers[i], true));
+    for (var i = 0; i < needs.length; i++) rows.push(renderMockupPersonRow(needs[i], false));
+    
+    var matchHtml = '';
+    if (offers.length > 0 && needs.length > 0) {
+        matchHtml = '<div class="match-row">🟢 ' + offers.length + ' offer' + (offers.length > 1 ? 's' : '') + 
+                    ' + ' + needs.length + ' need' + (needs.length > 1 ? 's' : '') + ' — going the same way</div>';
+    }
+    
+    var prefix = isLeaving ? 'To ' : 'From ';
+    
+    return [
+        '<div class="city-section">',
+        '  <div class="city-header">' + prefix + escHtml(city) + ' <span class="city-count">' + total + ' people</span></div>',
+        rows.join(''),
+        matchHtml,
+        '</div>'
+    ].join('');
+}
+
+function renderMockupDirectionColumn(requests, isLeaving) {
+    var header = isLeaving ? '↑ Leaving College Station' : '↓ Coming to College Station';
+    var headerClass = isLeaving ? 'from-cs' : 'to-cs';
+    
+    if (!requests || requests.length === 0) {
+        return [
+            '<div class="direction-col">',
+            '  <div class="direction-header ' + headerClass + '">' + header + '</div>',
+            '  <div class="direction-body">',
+            '    <div class="empty-direction">No rides posted</div>',
+            '  </div>',
+            '</div>'
+        ].join('');
+    }
+    
+    // Group by city
+    var byCity = {};
+    var key = isLeaving ? 'request_destination' : 'request_origin';
+    for (var i = 0; i < requests.length; i++) {
+        var city = requests[i][key] || 'Unknown';
+        if (!byCity[city]) byCity[city] = [];
+        byCity[city].push(requests[i]);
+    }
+    
+    var cities = Object.keys(byCity).sort();
+    var sections = [];
+    for (var ci = 0; ci < cities.length; ci++) {
+        sections.push(renderMockupCitySection(cities[ci], byCity[cities[ci]], isLeaving));
+    }
+    
+    return [
+        '<div class="direction-col">',
+        '  <div class="direction-header ' + headerClass + '">' + header + '</div>',
+        '  <div class="direction-body">',
+        sections.join(''),
+        '  </div>',
+        '</div>'
+    ].join('');
+}
+
+function renderMockupOthersSection(requests) {
+    if (!requests || requests.length === 0) return '';
+    
+    var rows = [];
+    for (var i = 0; i < requests.length; i++) {
+        var r = requests[i];
+        var isOffer = r.request_type === 'offer';
+        var name = displayName(r);
+        var route = escHtml(r.request_origin || '?') + ' → ' + escHtml(r.request_destination || '?');
+        var msg = r.raw_message ? escHtml(r.raw_message.slice(0, 50)) : '';
+        var meta = r.ride_plan_time ? formatTime(r.ride_plan_time) : formatMsgTime(r.created_at);
+        
+        rows.push([
+            '<div class="person-row" style="padding: 6px 8px;">',
+            '  <span class="type-dot ' + (isOffer ? 'offer' : 'need') + '"></span>',
+            '  <span class="person-name">' + escHtml(name) + '</span>',
+            '  <span class="person-msg">' + route + (msg ? ' · "' + msg + '"' : '') + '</span>',
+            '  <span class="person-meta">' + escHtml(meta) + '</span>',
+            '</div>'
+        ].join(''));
+    }
+    
+    return [
+        '<div class="others-section">',
+        '  <div class="others-label">Others</div>',
+        '  <div class="others-body">',
+        rows.join(''),
+        '  </div>',
+        '</div>'
+    ].join('');
+}
+
+function renderMockupDateBlock(dateKey, requests) {
+    var dateLabel = dateKey === 'flexible' ? 'Flexible Dates' : formatDate(dateKey);
+    var isToday = dateLabel.startsWith('Today');
+    var todayBadge = isToday ? ' <span class="today-badge">Today</span>' : '';
+    
+    var grouped = groupByDirection(requests);
+    var leavingCount = grouped.leaving.length;
+    var arrivingCount = grouped.arriving.length;
+    var othersCount = grouped.others.length;
+    
+    var summaryParts = [];
+    if (leavingCount > 0) summaryParts.push(leavingCount + ' leaving');
+    if (arrivingCount > 0) summaryParts.push(arrivingCount + ' arriving');
+    if (othersCount > 0) summaryParts.push(othersCount + ' other' + (othersCount > 1 ? 's' : ''));
+    var summary = summaryParts.length > 0 ? ' <span class="date-summary">' + summaryParts.join(' · ') + '</span>' : '';
+    
+    return [
+        '<div class="date-block">',
+        '  <div class="date-label">' + dateLabel + todayBadge + summary + '</div>',
+        '  <div class="directions">',
+        renderMockupDirectionColumn(grouped.leaving, true),
+        renderMockupDirectionColumn(grouped.arriving, false),
+        '  </div>',
+        renderMockupOthersSection(grouped.others),
+        '</div>'
+    ].join('');
+}
+
 // ── Data ──────────────────────────────────────────────────────────────────
 
 async function getBoardData() {
@@ -591,6 +760,130 @@ function renderClusterCard(cluster, digestKey) {
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────
+
+// Temporary mockup route for layout preview
+app.get('/mockup', function(req, res) {
+    res.sendFile(require('path').join(__dirname, 'mockup.html'));
+});
+
+// ── Test route: mockup layout with real data ─────────────────────────────
+app.get('/test', async function(req, res) {
+    try {
+        var today = new Date().toISOString().split('T')[0];
+
+        var results = await Promise.all([
+            supabase.from('v3_requests').select('*')
+                .eq('request_category', 'ride')
+                .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
+                .order('created_at', { ascending: false }),
+            supabase.from('monitored_groups').select('group_id, group_name, is_test').eq('active', true)
+        ]);
+
+        var allGroups = results[1].data || [];
+        var testGroupFilter = new Set();
+        var activeCount = 0;
+        for (var gi = 0; gi < allGroups.length; gi++) {
+            if (allGroups[gi].is_test) {
+                testGroupFilter.add(allGroups[gi].group_id);
+                if (allGroups[gi].group_name) {
+                    testGroupFilter.add(allGroups[gi].group_name);
+                }
+            } else {
+                activeCount++;
+            }
+        }
+
+        var rawReqs = results[0].data || [];
+        var allReqs = rawReqs.filter(function(r) {
+            return !r.source_group || !testGroupFilter.has(r.source_group);
+        });
+
+        // Group by date
+        var byDate = {};
+        for (var i = 0; i < allReqs.length; i++) {
+            var key = allReqs[i].ride_plan_date || 'flexible';
+            if (!byDate[key]) byDate[key] = [];
+            byDate[key].push(allReqs[i]);
+        }
+
+        var sortedDates = Object.keys(byDate).sort(function(a, b) {
+            if (a === 'flexible') return 1;
+            if (b === 'flexible') return -1;
+            return a.localeCompare(b);
+        });
+
+        // Render date blocks using mockup layout
+        var dateBlocksHtml;
+        if (sortedDates.length === 0) {
+            dateBlocksHtml = '<div class="empty">No ride activity yet.</div>';
+        } else {
+            var blocks = [];
+            for (var di = 0; di < sortedDates.length; di++) {
+                var dk = sortedDates[di];
+                blocks.push(renderMockupDateBlock(dk, byDate[dk]));
+            }
+            dateBlocksHtml = blocks.join('\n');
+        }
+
+        var totalCount = allReqs.length;
+        var subtitle = 'Tracking <strong>' + totalCount + ' ride request' + (totalCount !== 1 ? 's' : '') + 
+                      '</strong> across <strong>' + activeCount + ' WhatsApp group' + (activeCount !== 1 ? 's' : '') + 
+                      '</strong> this week';
+
+        // Read mockup.html to get the CSS
+        var fs = require('fs');
+        var mockupPath = require('path').join(__dirname, 'mockup.html');
+        var mockupContent = fs.readFileSync(mockupPath, 'utf8');
+        var cssMatch = mockupContent.match(/<style>([\s\S]*?)<\/style>/);
+        var css = cssMatch ? cssMatch[1] : '';
+
+        var html = [
+            '<!DOCTYPE html>',
+            '<html lang="en">',
+            '<head>',
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            '<title>Aggie Connect — Test Mockup Layout</title>',
+            '<style>' + css + '</style>',
+            '</head>',
+            '<body>',
+            '<div class="container">',
+            '  <div class="hero">',
+            '    <h1>Aggie Connect</h1>',
+            '    <p class="subtitle">' + subtitle + '</p>',
+            '  </div>',
+            '  <div class="legend">',
+            '    <div class="legend-left">',
+            '      <div class="legend-item"><span class="legend-dot need"></span> Looking for ride</div>',
+            '      <div class="legend-item"><span class="legend-dot offer"></span> Offering ride</div>',
+            '    </div>',
+            '    <div class="clock"><span id="live-time"></span> CT</div>',
+            '  </div>',
+            dateBlocksHtml,
+            '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; v3.2-mockup</div>',
+            '</div>',
+            '<script>',
+            '(function() {',
+            '  function updateClock() {',
+            '    var now = new Date();',
+            '    var opts = { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" };',
+            '    var el = document.getElementById("live-time");',
+            '    if (el) el.textContent = now.toLocaleTimeString("en-US", opts);',
+            '  }',
+            '  updateClock();',
+            '  setInterval(updateClock, 30000);',
+            '})()',
+            '</script>',
+            '</body>',
+            '</html>'
+        ].join('\n');
+
+        res.send(html);
+    } catch (err) {
+        console.error('Test route error:', err);
+        res.status(500).send('Error: ' + err.message);
+    }
+});
 
 app.get('/', async function(req, res) {
     try {

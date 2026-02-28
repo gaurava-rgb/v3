@@ -3,3 +3,6 @@ node_modules/
 .v3_auth/
 *.log
 .DS_Store
+.specstory/
+.cursorindexingignore
+dashboard-mockup-renderer.js
