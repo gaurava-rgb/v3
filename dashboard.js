@@ -965,11 +965,9 @@ app.get('/', optionalAuth, async function(req, res) {
         }
 
         var rawReqs = results[0].data || [];
-        console.log('[DEBUG] rawReqs:', rawReqs.length, 'error0:', JSON.stringify(results[0].error), 'error1:', JSON.stringify(results[1].error), 'groups:', allGroups.length, 'activeCount:', activeCount);
         var allReqs = rawReqs.filter(function(r) {
             return !r.source_group || !testGroupFilter.has(r.source_group);
         });
-        console.log('[DEBUG] after filter:', allReqs.length);
 
         // Group by date
         var byDate = {};
