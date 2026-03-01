@@ -39,6 +39,11 @@ function clearAuthCookies(res) {
     res.clearCookie('refresh_token', { path: '/' });
 }
 
+// Separate client for auth operations — prevents poisoning the service_role client's state
+var supabaseAuth = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false }
+});
+
 async function optionalAuth(req, res, next) {
     req.user = null;
     var accessToken = req.cookies.access_token;
@@ -48,7 +53,7 @@ async function optionalAuth(req, res, next) {
 
     if (accessToken) {
         try {
-            var result = await supabase.auth.getUser(accessToken);
+            var result = await supabaseAuth.auth.getUser(accessToken);
             if (result.data && result.data.user) {
                 req.user = result.data.user;
                 return next();
@@ -58,7 +63,7 @@ async function optionalAuth(req, res, next) {
 
     if (refreshToken) {
         try {
-            var refreshResult = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+            var refreshResult = await supabaseAuth.auth.refreshSession({ refresh_token: refreshToken });
             if (refreshResult.data && refreshResult.data.session) {
                 var session = refreshResult.data.session;
                 setAuthCookies(res, session.access_token, session.refresh_token);
@@ -853,7 +858,7 @@ app.post('/login', async function(req, res) {
     }
 
     try {
-        var result = await supabase.auth.signInWithOtp({
+        var result = await supabaseAuth.auth.signInWithOtp({
             email: email,
             options: { shouldCreateUser: true }
         });
@@ -892,7 +897,7 @@ app.post('/verify', async function(req, res) {
 
     try {
         // Try 'email' type first (returning users), then 'signup' (new users)
-        var result = await supabase.auth.verifyOtp({
+        var result = await supabaseAuth.auth.verifyOtp({
             email: email,
             token: token,
             type: 'email'
@@ -900,7 +905,7 @@ app.post('/verify', async function(req, res) {
 
         if (result.error) {
             // Might be a signup OTP — try signup type
-            var signupResult = await supabase.auth.verifyOtp({
+            var signupResult = await supabaseAuth.auth.verifyOtp({
                 email: email,
                 token: token,
                 type: 'signup'
