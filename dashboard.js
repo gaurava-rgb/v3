@@ -187,7 +187,7 @@ function renderVerifyPage(email, errorMsg) {
         '    <input type="hidden" name="email" value="' + escHtml(email) + '">',
         '    <label class="auth-label" for="token">Verification code</label>',
         '    <input class="auth-input" type="text" id="token" name="token"',
-        '           placeholder="000000" maxlength="6" pattern="[0-9]{6}"',
+        '           placeholder="00000000" maxlength="8" pattern="[0-9]{6,8}"',
         '           inputmode="numeric" autocomplete="one-time-code" required autofocus>',
         '    <button class="auth-btn" type="submit">Verify</button>',
         '  </form>',
@@ -886,11 +886,12 @@ app.post('/verify', async function(req, res) {
 
     if (!email || !token) return res.redirect('/login');
 
-    if (!/^\d{6}$/.test(token)) {
-        return res.send(renderVerifyPage(email, 'Please enter the 6-digit code from your email.'));
+    if (!/^\d{6,8}$/.test(token)) {
+        return res.send(renderVerifyPage(email, 'Please enter the code from your email.'));
     }
 
     try {
+        // Try 'email' type first (returning users), then 'signup' (new users)
         var result = await supabase.auth.verifyOtp({
             email: email,
             token: token,
@@ -898,7 +899,19 @@ app.post('/verify', async function(req, res) {
         });
 
         if (result.error) {
-            console.error('[Auth] OTP verify error:', result.error.message);
+            // Might be a signup OTP — try signup type
+            var signupResult = await supabase.auth.verifyOtp({
+                email: email,
+                token: token,
+                type: 'signup'
+            });
+            if (!signupResult.error) {
+                result = signupResult;
+            }
+        }
+
+        if (result.error) {
+            console.error('[Auth] OTP verify error:', JSON.stringify(result.error));
             var errMsg = 'Invalid code. Please check and try again.';
             if (result.error.message.toLowerCase().includes('expired')) {
                 errMsg = 'Code expired. Please request a new one.';
