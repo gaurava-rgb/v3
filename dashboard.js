@@ -1,19 +1,206 @@
 /**
- * Aggie Connect — Dashboard v3.1
- * Public ride board at v3.myburrow.club
+ * Aggie Connect — Dashboard v3.2
+ * Public ride board at ridesplit.app
  * Port: 3004
  */
 
 require('dotenv').config();
 
 const express = require('express');
+const cookieParser = require('cookie-parser');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
 const PORT = process.env.DASHBOARD_PORT || 3004;
 const DIGEST_KEY = process.env.DIGEST_KEY || '';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
+// ── Auth Helpers ──────────────────────────────────────────────────────────
+
+var COOKIE_OPTS = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/'
+};
+
+function setAuthCookies(res, accessToken, refreshToken) {
+    res.cookie('access_token', accessToken,
+        Object.assign({}, COOKIE_OPTS, { maxAge: 60 * 60 * 1000 }));
+    res.cookie('refresh_token', refreshToken,
+        Object.assign({}, COOKIE_OPTS, { maxAge: 7 * 24 * 60 * 60 * 1000 }));
+}
+
+function clearAuthCookies(res) {
+    res.clearCookie('access_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/' });
+}
+
+async function optionalAuth(req, res, next) {
+    req.user = null;
+    var accessToken = req.cookies.access_token;
+    var refreshToken = req.cookies.refresh_token;
+
+    if (!accessToken && !refreshToken) return next();
+
+    if (accessToken) {
+        try {
+            var result = await supabase.auth.getUser(accessToken);
+            if (result.data && result.data.user) {
+                req.user = result.data.user;
+                return next();
+            }
+        } catch (e) { /* token invalid, try refresh */ }
+    }
+
+    if (refreshToken) {
+        try {
+            var refreshResult = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+            if (refreshResult.data && refreshResult.data.session) {
+                var session = refreshResult.data.session;
+                setAuthCookies(res, session.access_token, session.refresh_token);
+                req.user = refreshResult.data.user;
+                return next();
+            }
+        } catch (e) {
+            console.error('[Auth] Refresh error:', e.message);
+        }
+    }
+
+    clearAuthCookies(res);
+    next();
+}
+
+function renderLoginPage(errorMsg, prefillEmail) {
+    var errorHtml = errorMsg
+        ? '<div class="auth-error">' + escHtml(errorMsg) + '</div>'
+        : '';
+    return [
+        '<!DOCTYPE html>',
+        '<html lang="en">',
+        '<head>',
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        '<title>Sign In — RideSplit</title>',
+        '<style>',
+        '  * { margin: 0; padding: 0; box-sizing: border-box; }',
+        '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+        '         background: #fafafa; color: #1a1a1a; min-height: 100vh;',
+        '         display: flex; align-items: center; justify-content: center; }',
+        '  .auth-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;',
+        '               padding: 32px 28px; max-width: 380px; width: 100%; margin: 20px; }',
+        '  .auth-card h1 { font-size: 22px; font-weight: 700; text-align: center;',
+        '                   letter-spacing: -0.5px; margin-bottom: 4px; }',
+        '  .auth-subtitle { text-align: center; font-size: 14px; color: #666;',
+        '                    margin-bottom: 24px; }',
+        '  .auth-label { display: block; font-size: 13px; font-weight: 600;',
+        '                color: #555; margin-bottom: 6px; }',
+        '  .auth-input { width: 100%; padding: 10px 12px; font-size: 15px;',
+        '                border: 1px solid #d0d0d0; border-radius: 8px;',
+        '                outline: none; transition: border-color 0.2s; }',
+        '  .auth-input:focus { border-color: #500000; }',
+        '  .auth-btn { width: 100%; padding: 12px; font-size: 15px; font-weight: 600;',
+        '              background: #500000; color: #fff; border: none; border-radius: 8px;',
+        '              cursor: pointer; margin-top: 16px; transition: background 0.2s; }',
+        '  .auth-btn:hover { background: #6b0000; }',
+        '  .auth-btn:active { background: #3a0000; }',
+        '  .auth-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;',
+        '                border-radius: 8px; padding: 10px 14px; font-size: 13px;',
+        '                margin-bottom: 16px; }',
+        '  .auth-footer { text-align: center; font-size: 11px; color: #bbb;',
+        '                  margin-top: 20px; }',
+        '</style>',
+        '</head>',
+        '<body>',
+        '<div class="auth-card">',
+        '  <h1>Aggie Connect</h1>',
+        '  <p class="auth-subtitle">Sign in with your TAMU email</p>',
+        errorHtml,
+        '  <form method="POST" action="/login">',
+        '    <label class="auth-label" for="email">Email address</label>',
+        '    <input class="auth-input" type="email" id="email" name="email"',
+        '           placeholder="netid@tamu.edu" required autocomplete="email"',
+        '           value="' + escHtml(prefillEmail || '') + '" autofocus>',
+        '    <button class="auth-btn" type="submit">Send Verification Code</button>',
+        '  </form>',
+        '  <div class="auth-footer">Only @tamu.edu emails are accepted</div>',
+        '</div>',
+        '</body>',
+        '</html>'
+    ].join('\n');
+}
+
+function renderVerifyPage(email, errorMsg) {
+    var errorHtml = errorMsg
+        ? '<div class="auth-error">' + escHtml(errorMsg) + '</div>'
+        : '';
+    return [
+        '<!DOCTYPE html>',
+        '<html lang="en">',
+        '<head>',
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        '<title>Verify — RideSplit</title>',
+        '<style>',
+        '  * { margin: 0; padding: 0; box-sizing: border-box; }',
+        '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+        '         background: #fafafa; color: #1a1a1a; min-height: 100vh;',
+        '         display: flex; align-items: center; justify-content: center; }',
+        '  .auth-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;',
+        '               padding: 32px 28px; max-width: 380px; width: 100%; margin: 20px; }',
+        '  .auth-card h1 { font-size: 22px; font-weight: 700; text-align: center;',
+        '                   letter-spacing: -0.5px; margin-bottom: 4px; }',
+        '  .auth-subtitle { text-align: center; font-size: 14px; color: #666;',
+        '                    margin-bottom: 24px; line-height: 1.4; }',
+        '  .auth-email { font-weight: 600; color: #1a1a1a; }',
+        '  .auth-label { display: block; font-size: 13px; font-weight: 600;',
+        '                color: #555; margin-bottom: 6px; }',
+        '  .auth-input { width: 100%; padding: 10px 12px; font-size: 20px;',
+        '                border: 1px solid #d0d0d0; border-radius: 8px;',
+        '                outline: none; text-align: center; letter-spacing: 6px;',
+        '                font-weight: 600; transition: border-color 0.2s; }',
+        '  .auth-input:focus { border-color: #500000; }',
+        '  .auth-btn { width: 100%; padding: 12px; font-size: 15px; font-weight: 600;',
+        '              background: #500000; color: #fff; border: none; border-radius: 8px;',
+        '              cursor: pointer; margin-top: 16px; transition: background 0.2s; }',
+        '  .auth-btn:hover { background: #6b0000; }',
+        '  .auth-btn:active { background: #3a0000; }',
+        '  .auth-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;',
+        '                border-radius: 8px; padding: 10px 14px; font-size: 13px;',
+        '                margin-bottom: 16px; }',
+        '  .auth-links { text-align: center; margin-top: 16px; font-size: 13px; }',
+        '  .auth-links a { color: #500000; text-decoration: none; }',
+        '  .auth-links a:hover { text-decoration: underline; }',
+        '  .auth-divider { color: #ddd; margin: 0 8px; }',
+        '</style>',
+        '</head>',
+        '<body>',
+        '<div class="auth-card">',
+        '  <h1>Check your email</h1>',
+        '  <p class="auth-subtitle">We sent a 6-digit code to<br>',
+        '     <span class="auth-email">' + escHtml(email) + '</span></p>',
+        errorHtml,
+        '  <form method="POST" action="/verify">',
+        '    <input type="hidden" name="email" value="' + escHtml(email) + '">',
+        '    <label class="auth-label" for="token">Verification code</label>',
+        '    <input class="auth-input" type="text" id="token" name="token"',
+        '           placeholder="000000" maxlength="6" pattern="[0-9]{6}"',
+        '           inputmode="numeric" autocomplete="one-time-code" required autofocus>',
+        '    <button class="auth-btn" type="submit">Verify</button>',
+        '  </form>',
+        '  <div class="auth-links">',
+        '    <a href="/login?email=' + encodeURIComponent(email) + '">Resend code</a>',
+        '    <span class="auth-divider">|</span>',
+        '    <a href="/login">Different email</a>',
+        '  </div>',
+        '</div>',
+        '</body>',
+        '</html>'
+    ].join('\n');
+}
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -45,7 +232,10 @@ function redactContact(contact) {
     return redactName(s);
 }
 
-function displayName(req) {
+function displayName(req, isLoggedIn) {
+    if (isLoggedIn) {
+        return req.sender_name || req.source_contact || 'Unknown';
+    }
     if (req.sender_name) return redactName(req.sender_name);
     return redactContact(req.source_contact);
 }
@@ -234,9 +424,9 @@ function groupByDirection(requests) {
     return { leaving: leaving, arriving: arriving, others: others };
 }
 
-function renderMockupPersonRow(req, isOffer) {
+function renderMockupPersonRow(req, isOffer, isLoggedIn) {
     var typeClass = isOffer ? 'offer' : 'need';
-    var name = displayName(req);
+    var name = displayName(req, isLoggedIn);
     var msg = req.raw_message ? escHtml(req.raw_message.slice(0, 60)) : '';
     var time = req.ride_plan_time ? formatTime(req.ride_plan_time) : '';
     var createdDate = req.created_at ? formatMsgTime(req.created_at) : '';
@@ -252,14 +442,14 @@ function renderMockupPersonRow(req, isOffer) {
     ].join('');
 }
 
-function renderMockupCitySection(city, requests, isLeaving) {
+function renderMockupCitySection(city, requests, isLeaving, isLoggedIn) {
     var offers = requests.filter(function(r) { return r.request_type === 'offer'; });
     var needs = requests.filter(function(r) { return r.request_type === 'need'; });
     var total = requests.length;
-    
+
     var rows = [];
-    for (var i = 0; i < offers.length; i++) rows.push(renderMockupPersonRow(offers[i], true));
-    for (var i = 0; i < needs.length; i++) rows.push(renderMockupPersonRow(needs[i], false));
+    for (var i = 0; i < offers.length; i++) rows.push(renderMockupPersonRow(offers[i], true, isLoggedIn));
+    for (var i = 0; i < needs.length; i++) rows.push(renderMockupPersonRow(needs[i], false, isLoggedIn));
     
     var matchHtml = '';
     if (offers.length > 0 && needs.length > 0) {
@@ -278,7 +468,7 @@ function renderMockupCitySection(city, requests, isLeaving) {
     ].join('');
 }
 
-function renderMockupDirectionColumn(requests, isLeaving) {
+function renderMockupDirectionColumn(requests, isLeaving, isLoggedIn) {
     var header = isLeaving ? '↑ Leaving College Station' : '↓ Coming to College Station';
     var headerClass = isLeaving ? 'from-cs' : 'to-cs';
     
@@ -305,7 +495,7 @@ function renderMockupDirectionColumn(requests, isLeaving) {
     var cities = Object.keys(byCity).sort();
     var sections = [];
     for (var ci = 0; ci < cities.length; ci++) {
-        sections.push(renderMockupCitySection(cities[ci], byCity[cities[ci]], isLeaving));
+        sections.push(renderMockupCitySection(cities[ci], byCity[cities[ci]], isLeaving, isLoggedIn));
     }
     
     return [
@@ -318,14 +508,14 @@ function renderMockupDirectionColumn(requests, isLeaving) {
     ].join('');
 }
 
-function renderMockupOthersSection(requests) {
+function renderMockupOthersSection(requests, isLoggedIn) {
     if (!requests || requests.length === 0) return '';
-    
+
     var rows = [];
     for (var i = 0; i < requests.length; i++) {
         var r = requests[i];
         var isOffer = r.request_type === 'offer';
-        var name = displayName(r);
+        var name = displayName(r, isLoggedIn);
         var route = escHtml(r.request_origin || '?') + ' → ' + escHtml(r.request_destination || '?');
         var msg = r.raw_message ? escHtml(r.raw_message.slice(0, 50)) : '';
         var meta = r.ride_plan_time ? formatTime(r.ride_plan_time) : formatMsgTime(r.created_at);
@@ -350,30 +540,30 @@ function renderMockupOthersSection(requests) {
     ].join('');
 }
 
-function renderMockupDateBlock(dateKey, requests) {
+function renderMockupDateBlock(dateKey, requests, isLoggedIn) {
     var dateLabel = dateKey === 'flexible' ? 'Flexible Dates' : formatDate(dateKey);
     var isToday = dateLabel.startsWith('Today');
     var todayBadge = isToday ? ' <span class="today-badge">Today</span>' : '';
-    
+
     var grouped = groupByDirection(requests);
     var leavingCount = grouped.leaving.length;
     var arrivingCount = grouped.arriving.length;
     var othersCount = grouped.others.length;
-    
+
     var summaryParts = [];
     if (leavingCount > 0) summaryParts.push(leavingCount + ' leaving');
     if (arrivingCount > 0) summaryParts.push(arrivingCount + ' arriving');
     if (othersCount > 0) summaryParts.push(othersCount + ' other' + (othersCount > 1 ? 's' : ''));
     var summary = summaryParts.length > 0 ? ' <span class="date-summary">' + summaryParts.join(' · ') + '</span>' : '';
-    
+
     return [
         '<div class="date-block">',
         '  <div class="date-label">' + dateLabel + todayBadge + summary + '</div>',
         '  <div class="directions">',
-        renderMockupDirectionColumn(grouped.leaving, true),
-        renderMockupDirectionColumn(grouped.arriving, false),
+        renderMockupDirectionColumn(grouped.leaving, true, isLoggedIn),
+        renderMockupDirectionColumn(grouped.arriving, false, isLoggedIn),
         '  </div>',
-        renderMockupOthersSection(grouped.others),
+        renderMockupOthersSection(grouped.others, isLoggedIn),
         '</div>'
     ].join('');
 }
@@ -645,9 +835,96 @@ function renderClusterCard(cluster, digestKey) {
     return parts.join('\n');
 }
 
+// ── Auth Routes ───────────────────────────────────────────────────────────
+
+app.get('/login', function(req, res) {
+    var prefill = req.query.email || '';
+    res.send(renderLoginPage('', prefill));
+});
+
+app.post('/login', async function(req, res) {
+    var email = (req.body.email || '').trim().toLowerCase();
+
+    if (!email || !email.endsWith('@tamu.edu')) {
+        return res.send(renderLoginPage('Please use your @tamu.edu email address.', email));
+    }
+    if (!/^[^\s@]+@tamu\.edu$/.test(email)) {
+        return res.send(renderLoginPage('Please enter a valid @tamu.edu email.', email));
+    }
+
+    try {
+        var result = await supabase.auth.signInWithOtp({
+            email: email,
+            options: { shouldCreateUser: true }
+        });
+
+        if (result.error) {
+            console.error('[Auth] OTP send error:', result.error.message);
+            if (result.error.message.includes('rate')) {
+                return res.send(renderLoginPage('Too many attempts. Please wait a minute and try again.', email));
+            }
+            return res.send(renderLoginPage('Failed to send verification code. Please try again.', email));
+        }
+
+        res.redirect('/verify?email=' + encodeURIComponent(email));
+    } catch (err) {
+        console.error('[Auth] OTP send exception:', err.message);
+        res.send(renderLoginPage('Something went wrong. Please try again.', email));
+    }
+});
+
+app.get('/verify', function(req, res) {
+    var email = (req.query.email || '').trim();
+    if (!email) return res.redirect('/login');
+    res.send(renderVerifyPage(email, ''));
+});
+
+app.post('/verify', async function(req, res) {
+    var email = (req.body.email || '').trim().toLowerCase();
+    var token = (req.body.token || '').replace(/\s/g, '');
+
+    if (!email || !token) return res.redirect('/login');
+
+    if (!/^\d{6}$/.test(token)) {
+        return res.send(renderVerifyPage(email, 'Please enter the 6-digit code from your email.'));
+    }
+
+    try {
+        var result = await supabase.auth.verifyOtp({
+            email: email,
+            token: token,
+            type: 'email'
+        });
+
+        if (result.error) {
+            console.error('[Auth] OTP verify error:', result.error.message);
+            var errMsg = 'Invalid code. Please check and try again.';
+            if (result.error.message.toLowerCase().includes('expired')) {
+                errMsg = 'Code expired. Please request a new one.';
+            }
+            return res.send(renderVerifyPage(email, errMsg));
+        }
+
+        if (!result.data.session) {
+            return res.send(renderVerifyPage(email, 'Verification failed. Please try again.'));
+        }
+
+        setAuthCookies(res, result.data.session.access_token, result.data.session.refresh_token);
+        res.redirect('/');
+    } catch (err) {
+        console.error('[Auth] OTP verify exception:', err.message);
+        res.send(renderVerifyPage(email, 'Something went wrong. Please try again.'));
+    }
+});
+
+app.get('/logout', function(req, res) {
+    clearAuthCookies(res);
+    res.redirect('/');
+});
+
 // ── Route ─────────────────────────────────────────────────────────────────
 
-app.get('/', async function(req, res) {
+app.get('/', optionalAuth, async function(req, res) {
     try {
         var today = new Date().toISOString().split('T')[0];
 
@@ -692,6 +969,10 @@ app.get('/', async function(req, res) {
             return a.localeCompare(b);
         });
 
+        // Auth state
+        var isLoggedIn = !!req.user;
+        var userEmail = req.user ? req.user.email : '';
+
         // Render date blocks
         var dateBlocksHtml;
         if (sortedDates.length === 0) {
@@ -700,15 +981,20 @@ app.get('/', async function(req, res) {
             var blocks = [];
             for (var di = 0; di < sortedDates.length; di++) {
                 var dk = sortedDates[di];
-                blocks.push(renderMockupDateBlock(dk, byDate[dk]));
+                blocks.push(renderMockupDateBlock(dk, byDate[dk], isLoggedIn));
             }
             dateBlocksHtml = blocks.join('\n');
         }
 
         var totalCount = allReqs.length;
-        var subtitle = 'Tracking <strong>' + totalCount + ' ride request' + (totalCount !== 1 ? 's' : '') + 
-                      '</strong> across <strong>' + activeCount + ' WhatsApp group' + (activeCount !== 1 ? 's' : '') + 
+        var subtitle = 'Tracking <strong>' + totalCount + ' ride request' + (totalCount !== 1 ? 's' : '') +
+                      '</strong> across <strong>' + activeCount + ' WhatsApp group' + (activeCount !== 1 ? 's' : '') +
                       '</strong> this week';
+
+        // Auth UI in legend bar
+        var authHtml = isLoggedIn
+            ? '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail) + '</span> · <a href="/logout">Sign out</a></div>'
+            : '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a></div>';
 
         // Read mockup.html to get the CSS
         var fs = require('fs');
@@ -732,7 +1018,12 @@ app.get('/', async function(req, res) {
             '<meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1">',
             '<title>Aggie Connect</title>',
-            '<style>' + css + '</style>',
+            '<style>' + css + '',
+            '  .auth-link { font-size: 12px; font-weight: 600; white-space: nowrap; }',
+            '  .auth-link a { color: #500000; text-decoration: none; }',
+            '  .auth-link a:hover { text-decoration: underline; }',
+            '  .auth-email-display { color: #888; font-weight: 400; }',
+            '</style>',
             '</head>',
             '<body>',
             '<div class="container">',
@@ -745,6 +1036,7 @@ app.get('/', async function(req, res) {
             '      <div class="legend-item"><span class="legend-dot need"></span> Looking for ride</div>',
             '      <div class="legend-item"><span class="legend-dot offer"></span> Offering ride</div>',
             '    </div>',
+            authHtml,
             '    <div class="clock"><span id="live-time"></span> CT</div>',
             '  </div>',
             dateBlocksHtml,
