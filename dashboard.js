@@ -859,8 +859,9 @@ app.post('/login', async function(req, res) {
         });
 
         if (result.error) {
-            console.error('[Auth] OTP send error:', result.error.message);
-            if (result.error.message.includes('rate')) {
+            console.error('[Auth] OTP send error:', JSON.stringify(result.error));
+            var errMsg = result.error.message || result.error.msg || JSON.stringify(result.error);
+            if (errMsg.includes('rate')) {
                 return res.send(renderLoginPage('Too many attempts. Please wait a minute and try again.', email));
             }
             return res.send(renderLoginPage('Failed to send verification code. Please try again.', email));
