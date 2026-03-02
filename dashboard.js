@@ -245,6 +245,12 @@ function displayName(req, isLoggedIn) {
     return redactContact(req.source_contact);
 }
 
+function displayPhone(req, isLoggedIn) {
+    if (!req.source_contact) return '';
+    if (isLoggedIn) return req.source_contact;
+    return redactPhone(req.source_contact);
+}
+
 function formatDate(d) {
     if (!d) return 'Flexible';
     const date = new Date(d + 'T00:00:00');
@@ -429,148 +435,75 @@ function groupByDirection(requests) {
     return { leaving: leaving, arriving: arriving, others: others };
 }
 
-function renderMockupPersonRow(req, isOffer, isLoggedIn) {
-    var typeClass = isOffer ? 'offer' : 'need';
-    var name = displayName(req, isLoggedIn);
-    var msg = req.raw_message ? escHtml(req.raw_message.slice(0, 60)) : '';
-    var time = req.ride_plan_time ? formatTime(req.ride_plan_time) : '';
-    var createdDate = req.created_at ? formatMsgTime(req.created_at) : '';
-    var meta = time || createdDate;
-    
-    return [
-        '<div class="person-row">',
-        '  <span class="type-emoji">' + (typeClass === 'offer' ? '🚗' : '✋') + '</span>',
-        '  <span class="person-name">' + escHtml(name) + '</span>',
-        '  <span class="person-msg">' + msg + '</span>',
-        '  <span class="person-meta">' + escHtml(meta) + '</span>',
-        '</div>'
-    ].join('');
-}
-
-function renderMockupCitySection(city, requests, isLeaving, isLoggedIn) {
-    var offers = requests.filter(function(r) { return r.request_type === 'offer'; });
-    var needs = requests.filter(function(r) { return r.request_type === 'need'; });
-    var total = requests.length;
-
-    var rows = [];
-    for (var i = 0; i < offers.length; i++) rows.push(renderMockupPersonRow(offers[i], true, isLoggedIn));
-    for (var i = 0; i < needs.length; i++) rows.push(renderMockupPersonRow(needs[i], false, isLoggedIn));
-    
-    var matchHtml = '';
-    if (offers.length > 0 && needs.length > 0) {
-        matchHtml = '<div class="match-row">🟢 ' + offers.length + ' offer' + (offers.length > 1 ? 's' : '') + 
-                    ' + ' + needs.length + ' need' + (needs.length > 1 ? 's' : '') + ' — going the same way</div>';
-    }
-    
-    var prefix = isLeaving ? 'To ' : 'From ';
-    
-    return [
-        '<div class="city-section">',
-        '  <div class="city-header">' + prefix + escHtml(city) + ' <span class="city-count">' + total + ' people</span></div>',
-        rows.join(''),
-        matchHtml,
-        '</div>'
-    ].join('');
-}
-
-function renderMockupDirectionColumn(requests, isLeaving, isLoggedIn) {
-    var header = isLeaving ? '↑ Leaving College Station' : '↓ Coming to College Station';
-    var headerClass = isLeaving ? 'from-cs' : 'to-cs';
-    
-    if (!requests || requests.length === 0) {
-        return [
-            '<div class="direction-col">',
-            '  <div class="direction-header ' + headerClass + '">' + header + '</div>',
-            '  <div class="direction-body">',
-            '    <div class="empty-direction">No rides posted</div>',
-            '  </div>',
-            '</div>'
-        ].join('');
-    }
-    
-    // Group by city
-    var byCity = {};
-    var key = isLeaving ? 'request_destination' : 'request_origin';
-    for (var i = 0; i < requests.length; i++) {
-        var city = requests[i][key] || 'Unknown';
-        if (!byCity[city]) byCity[city] = [];
-        byCity[city].push(requests[i]);
-    }
-    
-    var cities = Object.keys(byCity).sort();
-    var sections = [];
-    for (var ci = 0; ci < cities.length; ci++) {
-        sections.push(renderMockupCitySection(cities[ci], byCity[cities[ci]], isLeaving, isLoggedIn));
-    }
-    
-    return [
-        '<div class="direction-col">',
-        '  <div class="direction-header ' + headerClass + '">' + header + '</div>',
-        '  <div class="direction-body">',
-        sections.join(''),
-        '  </div>',
-        '</div>'
-    ].join('');
-}
-
-function renderMockupOthersSection(requests, isLoggedIn) {
-    if (!requests || requests.length === 0) return '';
-
-    var rows = [];
-    for (var i = 0; i < requests.length; i++) {
-        var r = requests[i];
-        var isOffer = r.request_type === 'offer';
-        var name = displayName(r, isLoggedIn);
-        var route = escHtml(r.request_origin || '?') + ' → ' + escHtml(r.request_destination || '?');
-        var msg = r.raw_message ? escHtml(r.raw_message.slice(0, 50)) : '';
-        var meta = r.ride_plan_time ? formatTime(r.ride_plan_time) : formatMsgTime(r.created_at);
-        
-        rows.push([
-            '<div class="person-row" style="padding: 6px 8px;">',
-            '  <span class="type-emoji">' + (isOffer ? '🚗' : '✋') + '</span>',
-            '  <span class="person-name">' + escHtml(name) + '</span>',
-            '  <span class="person-msg">' + route + (msg ? ' · "' + msg + '"' : '') + '</span>',
-            '  <span class="person-meta">' + escHtml(meta) + '</span>',
-            '</div>'
-        ].join(''));
-    }
-    
-    return [
-        '<div class="others-section">',
-        '  <div class="others-label">Others</div>',
-        '  <div class="others-body">',
-        rows.join(''),
-        '  </div>',
-        '</div>'
-    ].join('');
-}
-
-function renderMockupDateBlock(dateKey, requests, isLoggedIn) {
+function renderDateTable(dateKey, requests, isLoggedIn) {
     var dateLabel = dateKey === 'flexible' ? 'Flexible Dates' : formatDate(dateKey);
     var isToday = dateLabel.startsWith('Today');
     var todayBadge = isToday ? ' <span class="today-badge">Today</span>' : '';
 
     var grouped = groupByDirection(requests);
-    var leavingCount = grouped.leaving.length;
-    var arrivingCount = grouped.arriving.length;
-    var othersCount = grouped.others.length;
-
     var summaryParts = [];
-    if (leavingCount > 0) summaryParts.push(leavingCount + ' leaving');
-    if (arrivingCount > 0) summaryParts.push(arrivingCount + ' arriving');
-    if (othersCount > 0) summaryParts.push(othersCount + ' other' + (othersCount > 1 ? 's' : ''));
-    var summary = summaryParts.length > 0 ? ' <span class="date-summary">' + summaryParts.join(' · ') + '</span>' : '';
+    if (grouped.leaving.length > 0) summaryParts.push(grouped.leaving.length + ' leaving');
+    if (grouped.arriving.length > 0) summaryParts.push(grouped.arriving.length + ' arriving');
+    if (grouped.others.length > 0) summaryParts.push(grouped.others.length + ' other' + (grouped.others.length > 1 ? 's' : ''));
+    var summary = summaryParts.length > 0 ? '<span class="date-summary">' + summaryParts.join(' · ') + '</span>' : '';
+
+    // Sort within each group: by destination, then offers before needs, then name
+    function sortGroup(arr) {
+        return arr.slice().sort(function(a, b) {
+            var destA = (a.request_destination || '').toLowerCase();
+            var destB = (b.request_destination || '').toLowerCase();
+            if (destA !== destB) return destA.localeCompare(destB);
+            if (a.request_type !== b.request_type) return a.request_type === 'offer' ? -1 : 1;
+            var nameA = (a.sender_name || a.source_contact || '').toLowerCase();
+            var nameB = (b.sender_name || b.source_contact || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+    }
+
+    function renderRow(r, dirClass) {
+        var isOffer = r.request_type === 'offer';
+        var emoji = isOffer ? '🚗' : '✋';
+        var name = displayName(r, isLoggedIn);
+        var phone = displayPhone(r, isLoggedIn);
+        var route = escHtml(r.request_origin || '?') + ' → ' + escHtml(r.request_destination || '?');
+        var msg = r.raw_message ? escHtml(r.raw_message) : '';
+        var time = r.ride_plan_time ? formatTime(r.ride_plan_time) : formatMsgTime(r.created_at);
+        return '<tr class="' + dirClass + '">' +
+            '<td class="col-type">' + emoji + '</td>' +
+            '<td class="col-name">' + escHtml(name) + '</td>' +
+            '<td class="col-phone">' + escHtml(phone) + '</td>' +
+            '<td class="col-route">' + route + '</td>' +
+            '<td class="col-msg">' + msg + '</td>' +
+            '<td class="col-time">' + escHtml(time) + '</td>' +
+            '</tr>';
+    }
+
+    var rows = [];
+    var sortedLeaving = sortGroup(grouped.leaving);
+    var sortedArriving = sortGroup(grouped.arriving);
+    var sortedOthers = sortGroup(grouped.others);
+
+    if (sortedLeaving.length > 0) {
+        rows.push('<tr class="section-header section-leaving"><td colspan="6">↑ Leaving College Station (' + sortedLeaving.length + ')</td></tr>');
+        for (var i = 0; i < sortedLeaving.length; i++) rows.push(renderRow(sortedLeaving[i], 'row-leaving'));
+    }
+    if (sortedArriving.length > 0) {
+        rows.push('<tr class="section-header section-arriving"><td colspan="6">↓ Coming to College Station (' + sortedArriving.length + ')</td></tr>');
+        for (var i = 0; i < sortedArriving.length; i++) rows.push(renderRow(sortedArriving[i], 'row-arriving'));
+    }
+    if (sortedOthers.length > 0) {
+        rows.push('<tr class="section-header section-others"><td colspan="6">Other Routes (' + sortedOthers.length + ')</td></tr>');
+        for (var i = 0; i < sortedOthers.length; i++) rows.push(renderRow(sortedOthers[i], 'row-others'));
+    }
 
     return [
         '<div class="date-block">',
         '  <div class="date-label">' + dateLabel + todayBadge + summary + '</div>',
-        '  <div class="directions">',
-        renderMockupDirectionColumn(grouped.leaving, true, isLoggedIn),
-        renderMockupDirectionColumn(grouped.arriving, false, isLoggedIn),
-        '  </div>',
-        renderMockupOthersSection(grouped.others, isLoggedIn),
+        '  <table class="ride-table">',
+        rows.join('\n'),
+        '  </table>',
         '</div>'
-    ].join('');
+    ].join('\n');
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────
@@ -941,6 +874,95 @@ app.get('/logout', function(req, res) {
     res.redirect('/');
 });
 
+// ── Static Pages ─────────────────────────────────────────────────────────
+
+function renderStaticPage(title, bodyHtml) {
+    return [
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        '<title>' + title + ' — RideSplit</title>',
+        '<style>',
+        '  * { margin: 0; padding: 0; box-sizing: border-box; }',
+        '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #1a1a1a; line-height: 1.7; }',
+        '  .page { max-width: 700px; margin: 0 auto; padding: 40px 20px; }',
+        '  h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }',
+        '  .updated { font-size: 12px; color: #999; margin-bottom: 24px; }',
+        '  h2 { font-size: 15px; font-weight: 700; margin-top: 20px; margin-bottom: 4px; color: #333; }',
+        '  p, li { font-size: 14px; color: #444; }',
+        '  ul { margin-left: 20px; margin-bottom: 8px; }',
+        '  li { margin-bottom: 2px; }',
+        '  a { color: #500000; }',
+        '  .back { display: inline-block; margin-bottom: 20px; font-size: 13px; color: #500000; text-decoration: none; }',
+        '  .back:hover { text-decoration: underline; }',
+        '  .faq-q { font-size: 14px; font-weight: 700; color: #1a1a1a; margin-top: 16px; }',
+        '  .faq-a { font-size: 14px; color: #444; margin-top: 2px; }',
+        '</style></head><body>',
+        '<div class="page">',
+        '<a class="back" href="/">&larr; Back to board</a>',
+        bodyHtml,
+        '</div></body></html>'
+    ].join('\n');
+}
+
+app.get('/terms', function(req, res) {
+    var body = [
+        '<h1>Terms of Use</h1>',
+        '<p class="updated">Last updated: March 1, 2026</p>',
+        '<h2>1. What RideSplit Is (and Isn\'t)</h2>',
+        '<p>RideSplit is a free, informational bulletin board that aggregates publicly posted ride-share messages from WhatsApp groups. We do not arrange, broker, or provide transportation services. We are not a ride-sharing company, a taxi service, or a transportation network company.</p>',
+        '<h2>2. No Guarantees</h2>',
+        '<p>All ride information is posted by third parties in WhatsApp groups. We make no guarantees about the accuracy, safety, reliability, or availability of any ride listed. Information may be outdated, incorrect, or no longer available.</p>',
+        '<h2>3. Your Responsibility</h2>',
+        '<p>By using this site, you acknowledge that:</p>',
+        '<ul>',
+        '<li>You are solely responsible for any arrangements you make with other users.</li>',
+        '<li>You assume all risk when sharing rides with others.</li>',
+        '<li>You should exercise your own judgment about the safety of any ride arrangement.</li>',
+        '<li>RideSplit is not a party to any agreement between riders and drivers.</li>',
+        '</ul>',
+        '<h2>4. We Are Not Liable</h2>',
+        '<p>To the maximum extent permitted by law, RideSplit and its creator(s) shall not be liable for any damages, injuries, losses, or disputes arising from ride arrangements made using information found on this site. This includes but is not limited to: accidents, property damage, personal injury, theft, fraud, or any other harm.</p>',
+        '<h2>5. No Vetting</h2>',
+        '<p>We do not verify the identity, driving record, insurance status, vehicle condition, or background of any person listed on this site. @tamu.edu email verification confirms university affiliation only, not trustworthiness.</p>',
+        '<h2>6. Data &amp; Privacy</h2>',
+        '<ul>',
+        '<li>We display messages that were already posted publicly in WhatsApp groups.</li>',
+        '<li>Full names and contact details are only visible to authenticated @tamu.edu users.</li>',
+        '<li>We do not sell or share your data with third parties.</li>',
+        '<li>We store login sessions via cookies. No passwords are stored.</li>',
+        '</ul>',
+        '<h2>7. Acceptable Use</h2>',
+        '<p>Do not use this site to: harass other users, post false information, scrape data for commercial purposes, or any unlawful activity.</p>',
+        '<h2>8. Changes</h2>',
+        '<p>We may update these terms at any time. Continued use of the site constitutes acceptance.</p>',
+        '<h2>9. Contact</h2>',
+        '<p><a href="mailto:gaurav_a@tamu.edu?subject=ridesplit">gaurav_a@tamu.edu</a> (subject: ridesplit)</p>'
+    ].join('\n');
+    res.send(renderStaticPage('Terms', body));
+});
+
+app.get('/faq', function(req, res) {
+    var body = [
+        '<h1>FAQs</h1>',
+        '<p class="updated">ridesplit.app</p>',
+        '<div class="faq-q">1. What is this website?</div>',
+        '<p class="faq-a">Hi, I made this to track groups on WhatsApp that I am in. I see a lot of messages across all these groups for tracking ride requests. It\'s hard to track who is going when, etc. I hope this helps, especially next week (spring break).</p>',
+        '<div class="faq-q">2. How to use this?</div>',
+        '<p class="faq-a">For now, find someone with whom you can split a ride on a date you like. If you login with your <strong>@tamu.edu</strong> email, you can see their details to contact them.</p>',
+        '<div class="faq-q">3. Who is it for?</div>',
+        '<p class="faq-a">Aggies only \u2014 You can only log in by verifying your <strong>@tamu.edu</strong> email. It was the simplest way I could add authentication and determine who actually sees our data.</p>',
+        '<div class="faq-q">4. Which groups are being tracked?</div>',
+        '<p class="faq-a">I\'ll add the list soon; it will update automatically.</p>',
+        '<div class="faq-q">5. Can you track our group?</div>',
+        '<p class="faq-a">Add +1-979-344-5977 (that\'s me \u2014 Gaurav), then I\'ll track rides in your group too.</p>',
+        '<div class="faq-q">6. This has bugs / I have questions / I have complaints. Who do I contact?</div>',
+        '<p class="faq-a"><a href="mailto:gaurav_a@tamu.edu?subject=ridesplit">gaurav_a@tamu.edu</a> (subject: ridesplit would be nice). Will add a contact form later.</p>',
+        '<div class="faq-q">7. Who made this?</div>',
+        '<p class="faq-a">Hi, it\'s me, <strong>Gaurav Arora</strong>. MS MIS \'26.</p>'
+    ].join('\n');
+    res.send(renderStaticPage('FAQ', body));
+});
+
 // ── Route ─────────────────────────────────────────────────────────────────
 
 app.get('/', optionalAuth, async function(req, res) {
@@ -1000,7 +1022,7 @@ app.get('/', optionalAuth, async function(req, res) {
             var blocks = [];
             for (var di = 0; di < sortedDates.length; di++) {
                 var dk = sortedDates[di];
-                blocks.push(renderMockupDateBlock(dk, byDate[dk], isLoggedIn));
+                blocks.push(renderDateTable(dk, byDate[dk], isLoggedIn));
             }
             dateBlocksHtml = blocks.join('\n');
         }
@@ -1014,13 +1036,6 @@ app.get('/', optionalAuth, async function(req, res) {
         var authHtml = isLoggedIn
             ? '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail) + '</span> · <a href="/logout">Sign out</a></div>'
             : '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a></div>';
-
-        // Read mockup.html to get the CSS
-        var fs = require('fs');
-        var mockupPath = require('path').join(__dirname, 'mockup.html');
-        var mockupContent = fs.readFileSync(mockupPath, 'utf8');
-        var cssMatch = mockupContent.match(/<style>([\s\S]*?)<\/style>/);
-        var css = cssMatch ? cssMatch[1] : '';
 
         var html = [
             '<!DOCTYPE html>',
@@ -1037,12 +1052,44 @@ app.get('/', optionalAuth, async function(req, res) {
             '<meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1">',
             '<title>Aggie Connect</title>',
-            '<style>' + css + '',
-            '  .legend { justify-content: center; }',
+            '<style>',
+            '  * { margin: 0; padding: 0; box-sizing: border-box; }',
+            '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #1a1a1a; line-height: 1.45; }',
+            '  .container { max-width: 100%; margin: 0 auto; padding: 20px 24px; }',
+            '  .hero { text-align: center; margin-bottom: 16px; }',
+            '  .hero h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }',
+            '  .hero .subtitle { font-size: 13px; color: #666; margin-top: 2px; }',
+            '  .hero .subtitle strong { color: #1a1a1a; }',
+            '  .legend { display: flex; gap: 20px; align-items: center; font-size: 14px; font-weight: 600; color: #555; padding: 8px 0; margin-bottom: 8px; position: sticky; top: 0; background: #fafafa; z-index: 20; border-bottom: 1px solid #e8e8e8; justify-content: center; }',
             '  .legend-right { position: absolute; right: 0; top: 0; bottom: 0; display: flex; align-items: center; gap: 10px; }',
             '  .legend-date { position: absolute; left: 0; top: 0; bottom: 0; display: flex; align-items: center; font-size: 13px; font-weight: 700; color: #333; opacity: 0; transition: opacity 0.2s; }',
             '  .legend-date.visible { opacity: 1; }',
-            '  .type-emoji { font-size: 11px; flex-shrink: 0; }',
+            '  .legend-item { display: flex; align-items: center; gap: 5px; }',
+            '  .clock { font-size: 12px; font-weight: 600; color: #888; white-space: nowrap; }',
+            '  .date-block { margin-bottom: 24px; }',
+            '  .date-label { font-size: 14px; font-weight: 700; color: #333; padding: 6px 0 4px; border-bottom: 2px solid #e0e0e0; margin-bottom: 0; display: flex; align-items: center; gap: 8px; }',
+            '  .today-badge { display: inline-block; background: #dcfce7; color: #16a34a; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; }',
+            '  .date-summary { margin-left: auto; font-size: 11px; font-weight: 400; color: #999; }',
+            '  .ride-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }',
+            '  .ride-table td { border: 1px solid #e8e8e8; padding: 5px 10px; vertical-align: top; }',
+            '  .ride-table tr:hover { background: #f5f5f5; }',
+            '  .col-type { width: 30px; text-align: center; font-size: 14px; }',
+            '  .col-name { font-weight: 600; white-space: nowrap; color: #333; }',
+            '  .col-phone { white-space: nowrap; color: #888; font-size: 12px; }',
+            '  .col-route { white-space: nowrap; color: #555; }',
+            '  .col-msg { color: #666; min-width: 200px; }',
+            '  .col-time { white-space: nowrap; color: #999; font-size: 12px; text-align: right; }',
+            '  .section-header td { padding: 4px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid #e8e8e8; }',
+            '  .section-leaving td { background: #dbeafe; color: #1d4ed8; }',
+            '  .section-arriving td { background: #dcfce7; color: #16a34a; }',
+            '  .section-others td { background: #f3f4f6; color: #6b7280; }',
+            '  .row-leaving { background: #f0f7ff; }',
+            '  .row-arriving { background: #f0fdf4; }',
+            '  .row-others { background: #fafafa; }',
+            '  .row-leaving:hover { background: #e0efff; }',
+            '  .row-arriving:hover { background: #e0f9e8; }',
+            '  .empty { padding: 40px; text-align: center; color: #aaa; font-size: 14px; }',
+            '  .footer { text-align: center; padding: 16px 0; font-size: 11px; color: #ccc; border-top: 1px solid #eee; margin-top: 20px; }',
             '  .auth-link { font-size: 12px; font-weight: 600; white-space: nowrap; }',
             '  .auth-link a { color: #500000; text-decoration: none; }',
             '  .auth-link a:hover { text-decoration: underline; }',
@@ -1065,7 +1112,7 @@ app.get('/', optionalAuth, async function(req, res) {
             '    </div>',
             '  </div>',
             dateBlocksHtml,
-            '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; v3.2</div>',
+            '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; <a href="/faq">FAQ</a> &middot; <a href="/terms">Terms</a> &middot; v3.2</div>',
             '</div>',
             '<script>',
             '(function() {',
