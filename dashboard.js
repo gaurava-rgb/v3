@@ -18,6 +18,17 @@ const PORT = process.env.DASHBOARD_PORT || 3004;
 const DIGEST_KEY = process.env.DIGEST_KEY || '';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
+const GA_TAG = [
+    '<!-- Google tag (gtag.js) -->',
+    '<script async src="https://www.googletagmanager.com/gtag/js?id=G-MC6FDBQ4MZ"></script>',
+    '<script>',
+    '  window.dataLayer = window.dataLayer || [];',
+    '  function gtag(){dataLayer.push(arguments);}',
+    "  gtag('js', new Date());",
+    "  gtag('config', 'G-MC6FDBQ4MZ');",
+    '</script>'
+].join('\n');
+
 // ── Auth Helpers ──────────────────────────────────────────────────────────
 
 var COOKIE_OPTS = {
@@ -87,6 +98,7 @@ function renderLoginPage(errorMsg, prefillEmail) {
         '<!DOCTYPE html>',
         '<html lang="en">',
         '<head>',
+        GA_TAG,
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         '<title>Sign In — RideSplit</title>',
@@ -146,6 +158,7 @@ function renderVerifyPage(email, errorMsg) {
         '<!DOCTYPE html>',
         '<html lang="en">',
         '<head>',
+        GA_TAG,
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         '<title>Verify — RideSplit</title>',
@@ -878,7 +891,9 @@ app.get('/logout', function(req, res) {
 
 function renderStaticPage(title, bodyHtml) {
     return [
-        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">',
+        '<!DOCTYPE html><html lang="en"><head>',
+        GA_TAG,
+        '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         '<title>' + title + ' — RideSplit</title>',
         '<style>',
@@ -1061,14 +1076,7 @@ app.get('/', optionalAuth, async function(req, res) {
             '<!DOCTYPE html>',
             '<html lang="en">',
             '<head>',
-            '<!-- Google tag (gtag.js) -->',
-            '<script async src="https://www.googletagmanager.com/gtag/js?id=G-PT7Y07LEPC"></script>',
-            '<script>',
-            '  window.dataLayer = window.dataLayer || [];',
-            '  function gtag(){dataLayer.push(arguments);}',
-            "  gtag('js', new Date());",
-            "  gtag('config', 'G-PT7Y07LEPC');",
-            '</script>',
+            GA_TAG,
             '<meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1">',
             '<title>Aggie Connect</title>',
@@ -1223,6 +1231,7 @@ app.get('/digest', async function(req, res) {
             '<!DOCTYPE html>',
             '<html lang="en">',
             '<head>',
+            GA_TAG,
             '<meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1">',
             '<title>Admin Digest</title>',
