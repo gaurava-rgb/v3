@@ -459,7 +459,7 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
     if (grouped.leaving.length > 0) summaryParts.push(grouped.leaving.length + ' leaving');
     if (grouped.arriving.length > 0) summaryParts.push(grouped.arriving.length + ' arriving');
     if (grouped.others.length > 0) summaryParts.push(grouped.others.length + ' other' + (grouped.others.length > 1 ? 's' : ''));
-    var summary = summaryParts.length > 0 ? '<span class="date-summary">' + summaryParts.join(' · ') + '</span>' : '';
+    var summary = summaryParts.length > 0 ? '<span class="date-summary">' + summaryParts.join(' &middot; ') + '</span>' : '';
 
     // Sort within each group: by destination, then offers before needs, then name
     function sortGroup(arr) {
@@ -512,7 +512,7 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
 
     return [
         '<div class="date-block">',
-        '  <div class="date-label">' + dateLabel + todayBadge + summary + '</div>',
+        '  <div class="date-label"><span class="date-text">' + dateLabel + '</span>' + todayBadge + summary + '</div>',
         '  <table class="ride-table">',
         rows.join('\n'),
         '  </table>',
@@ -1196,7 +1196,9 @@ app.get('/', optionalAuth, async function(req, res) {
             '        if (rect.top < legendBottom + 10 && rect.bottom > legendBottom) {',
             '          var label = dateBlocks[i].querySelector(".date-label");',
             '          if (label && label.getBoundingClientRect().top < legendBottom) {',
-            '            current = label.textContent.trim().split("\\n")[0];',
+            '            var dt = label.querySelector(".date-text");',
+            '            var sm = label.querySelector(".date-summary");',
+            '            current = (dt ? dt.textContent.trim() : label.textContent.trim().split("\\n")[0]) + (sm ? " \\u00B7 " + sm.textContent.trim() : "");',
             '          }',
             '        }',
             '      }',
