@@ -14,6 +14,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+app.use('/public', express.static(__dirname + '/public'));
 const PORT = process.env.DASHBOARD_PORT || 3004;
 const DIGEST_KEY = process.env.DIGEST_KEY || '';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -993,7 +994,9 @@ app.get('/faq', async function(req, res) {
         '<div class="faq-q">6. This has bugs / I have questions / I have complaints. Who do I contact?</div>',
         '<p class="faq-a"><a href="mailto:gaurav_a@tamu.edu?subject=ridesplit">gaurav_a@tamu.edu</a> (subject: ridesplit would be nice). Will add a contact form later.</p>',
         '<div class="faq-q">7. Who made this?</div>',
-        '<p class="faq-a">Hi, it\'s me, <strong>Gaurav Arora</strong>. MS MIS \'26.</p>'
+        '<p class="faq-a">Hi, it\'s me, <strong>Gaurav Arora</strong>. MS MIS \'26.</p>',
+        '<div class="faq-q">8. Is this made by AI?</div>',
+        '<p class="faq-a"><img src="/public/faq-ai.webp" alt="Is this made by AI?" style="max-width: 300px; border-radius: 8px; margin-top: 8px;"></p>'
     ].join('\n');
     res.send(renderStaticPage('FAQ', body));
 });
@@ -1129,6 +1132,24 @@ app.get('/', optionalAuth, async function(req, res) {
             '  .auth-banner a { color: #500000; font-weight: 700; text-decoration: underline; }',
             '  .auth-banner-close { cursor: pointer; color: #92400e; font-size: 18px; line-height: 1; opacity: 0.6; background: none; border: none; position: absolute; right: 12px; }',
             '  .auth-banner-close:hover { opacity: 1; }',
+            '  @media (max-width: 700px) {',
+            '    .container { padding: 12px 8px; }',
+            '    .hero h1 { font-size: 18px; }',
+            '    .hero .subtitle { font-size: 12px; }',
+            '    .hero .tagline { font-size: 11px; }',
+            '    .legend { flex-direction: column; gap: 4px; padding: 6px 0; position: sticky; top: 0; }',
+            '    .legend-right { position: static; justify-content: center; }',
+            '    .legend-date { position: static; opacity: 1; justify-content: center; font-size: 12px; }',
+            '    .legend-item { font-size: 12px; }',
+            '    .auth-link { font-size: 11px; }',
+            '    .clock { font-size: 11px; }',
+            '    .auth-banner { font-size: 12px; padding: 8px 32px 8px 12px; text-align: center; }',
+            '    .date-label { font-size: 13px; }',
+            '    .date-block { overflow-x: auto; -webkit-overflow-scrolling: touch; }',
+            '    .ride-table { font-size: 12px; min-width: 600px; }',
+            '    .ride-table td { padding: 4px 6px; }',
+            '    .col-msg { min-width: 150px; }',
+            '  }',
             '</style>',
             '</head>',
             '<body>',
