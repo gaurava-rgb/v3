@@ -1143,7 +1143,7 @@ app.get('/', optionalAuth, async function(req, res) {
             '      <div class="clock"><span id="live-time"></span> CT</div>',
             '    </div>',
             '  </div>',
-            isLoggedIn ? '' : '  <div class="auth-banner" id="auth-banner">🔒 Names and phone numbers are redacted. <a href="/login">Sign in with your @tamu.edu email</a> to see full contact details. <button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'">&times;</button></div>',
+            isLoggedIn ? '' : '  <div class="auth-banner" id="auth-banner"><span>🔒 Names and phone numbers are redacted. &nbsp;<a href="/login">Sign in with your @tamu.edu email</a>&nbsp; to see full contact details.</span><button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'">&times;</button></div>',
             dateBlocksHtml,
             '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; <a href="/faq">FAQ</a> &middot; <a href="/terms">Terms</a> &middot; v3.2</div>',
             '</div>',
