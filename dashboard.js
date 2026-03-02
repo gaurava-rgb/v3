@@ -941,7 +941,26 @@ app.get('/terms', function(req, res) {
     res.send(renderStaticPage('Terms', body));
 });
 
-app.get('/faq', function(req, res) {
+app.get('/faq', async function(req, res) {
+    // Fetch active monitored groups for Q4
+    var groupNames = [];
+    try {
+        var gRes = await supabase.from('monitored_groups').select('group_name')
+            .eq('active', true).neq('group_name', 'Dump');
+        if (gRes.data) {
+            var seen = {};
+            gRes.data.forEach(function(g) {
+                var n = g.group_name.trim();
+                if (!seen[n]) { seen[n] = true; groupNames.push(n); }
+            });
+            groupNames.sort();
+        }
+    } catch (e) { /* fallback: empty list */ }
+
+    var groupListHtml = groupNames.length
+        ? '<ul>' + groupNames.map(function(n) { return '<li>' + escHtml(n) + '</li>'; }).join('') + '</ul>'
+        : '<p class="faq-a"><em>Unable to load group list.</em></p>';
+
     var body = [
         '<h1>FAQs</h1>',
         '<p class="updated">ridesplit.app</p>',
@@ -952,7 +971,8 @@ app.get('/faq', function(req, res) {
         '<div class="faq-q">3. Who is it for?</div>',
         '<p class="faq-a">Aggies only \u2014 You can only log in by verifying your <strong>@tamu.edu</strong> email. It was the simplest way I could add authentication and determine who actually sees our data.</p>',
         '<div class="faq-q">4. Which groups are being tracked?</div>',
-        '<p class="faq-a">I\'ll add the list soon; it will update automatically.</p>',
+        '<p class="faq-a">Currently tracking ' + groupNames.length + ' WhatsApp groups:</p>',
+        groupListHtml,
         '<div class="faq-q">5. Can you track our group?</div>',
         '<p class="faq-a">Add +1-979-344-5977 (that\'s me \u2014 Gaurav), then I\'ll track rides in your group too.</p>',
         '<div class="faq-q">6. This has bugs / I have questions / I have complaints. Who do I contact?</div>',
