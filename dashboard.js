@@ -487,7 +487,7 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
             '<td class="col-phone">' + escHtml(phone) + '</td>' +
             '<td class="col-route">' + route + '</td>' +
             '<td class="col-msg">' + msg + '</td>' +
-            '<td class="col-time">' + escHtml(time) + '</td>' +
+            '<td class="col-time">sent ' + escHtml(time) + '</td>' +
             '</tr>';
     }
 
