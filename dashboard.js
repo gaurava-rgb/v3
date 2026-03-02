@@ -1070,7 +1070,7 @@ app.get('/', optionalAuth, async function(req, res) {
         // Auth UI in legend bar
         var authHtml = isLoggedIn
             ? '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail) + '</span> · <a href="/logout">Sign out</a></div>'
-            : '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a></div>';
+            : '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see full names &amp; numbers</div>';
 
         var html = [
             '<!DOCTYPE html>',
