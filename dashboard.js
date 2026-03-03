@@ -9,6 +9,9 @@ require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const { createClient } = require('@supabase/supabase-js');
+const { saveRequest } = require('./db');
+const { processRequest } = require('./matcher');
+const { normalizeLocation } = require('./normalize');
 
 const app = express();
 app.use(express.json());
@@ -888,6 +891,93 @@ app.get('/logout', function(req, res) {
     res.redirect('/');
 });
 
+// ── Submit Ride (Web Form) ───────────────────────────────────────────────
+
+app.post('/submit', optionalAuth, async function(req, res) {
+    if (!req.user) {
+        return res.status(401).json({ error: 'You must be signed in to submit a ride.' });
+    }
+
+    var type = (req.body.type || '').trim();
+    var origin = (req.body.origin || '').trim();
+    var destination = (req.body.destination || '').trim();
+    var date = (req.body.date || '').trim();
+    var name = (req.body.name || '').trim();
+    var phone = (req.body.phone || '').trim();
+    var time = (req.body.time || '').trim();
+    var comments = (req.body.comments || '').trim();
+    var originOther = (req.body.originOther || '').trim();
+    var destOther = (req.body.destOther || '').trim();
+
+    if (origin === 'Other' && originOther) origin = originOther;
+    if (destination === 'Other' && destOther) destination = destOther;
+
+    var errors = [];
+    var errorFields = [];
+    if (type !== 'need' && type !== 'offer') { errors.push('Select Looking or Offering.'); errorFields.push('type'); }
+    if (!origin) { errors.push('Origin is required.'); errorFields.push('origin'); }
+    if (!destination) { errors.push('Destination is required.'); errorFields.push('destination'); }
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { errors.push('Valid date is required.'); errorFields.push('date'); }
+    if (!name) { errors.push('Name is required.'); errorFields.push('name'); }
+    if (!phone || !/^\+?[\d\s\-()]{7,}$/.test(phone)) { errors.push('Valid phone number is required.'); errorFields.push('phone'); }
+    if (origin && destination && normalizeLocation(origin) === normalizeLocation(destination)) {
+        errors.push('Origin and destination cannot be the same.');
+        errorFields.push('origin', 'destination');
+    }
+    if (date) {
+        var today = new Date().toISOString().split('T')[0];
+        if (date < today) { errors.push('Date must be today or in the future.'); errorFields.push('date'); }
+    }
+    if (errors.length > 0) {
+        return res.status(400).json({ error: errors.join(' '), fields: errorFields });
+    }
+
+    var phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length === 10) phoneDigits = '1' + phoneDigits;
+
+    var typeLabel = type === 'offer' ? 'Offering ride' : 'Looking for ride';
+    var rawMessage = typeLabel + ' from ' + origin + ' to ' + destination;
+    if (time) rawMessage += ' around ' + time;
+    if (comments) rawMessage += '. ' + comments;
+
+    var details = {};
+    if (comments) details.description = comments;
+
+    try {
+        var request = await saveRequest({
+            source: 'web-form',
+            sourceGroup: null,
+            sourceContact: phoneDigits,
+            senderName: name,
+            type: type,
+            category: 'ride',
+            date: date,
+            ridePlanTime: time || null,
+            dateFuzzy: false,
+            possibleDates: [],
+            timeFuzzy: !time,
+            origin: origin,
+            destination: destination,
+            details: details,
+            rawMessage: rawMessage
+        });
+
+        if (!request) {
+            return res.status(409).json({ error: 'A matching ride request already exists.' });
+        }
+
+        var matches = await processRequest(request);
+        var matchCount = matches ? matches.length : 0;
+        console.log('[Dashboard] Web form submission saved:', request.id,
+            matchCount > 0 ? '(' + matchCount + ' matches)' : '');
+
+        return res.json({ success: true, requestId: request.id, matches: matchCount });
+    } catch (err) {
+        console.error('[Dashboard] Submit error:', err.message);
+        return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+});
+
 // ── Static Pages ─────────────────────────────────────────────────────────
 
 function renderStaticPage(title, bodyHtml) {
@@ -1150,6 +1240,44 @@ app.get('/', optionalAuth, async function(req, res) {
             '    .ride-table td { padding: 4px 6px; }',
             '    .col-msg { min-width: 150px; }',
             '  }',
+            '  .fab { position: fixed; bottom: 28px; right: 28px; width: 60px; height: 60px; border-radius: 50%; background: #500000; color: #fff; border: none; font-size: 32px; line-height: 60px; text-align: center; cursor: pointer; box-shadow: 0 4px 16px rgba(80,0,0,0.35); z-index: 1000; transition: transform 0.2s, background 0.2s; }',
+            '  .fab:hover { background: #6b0000; transform: scale(1.08); }',
+            '  .fab:active { background: #3a0000; transform: scale(0.96); }',
+            '  .fab.open { transform: rotate(45deg); }',
+            '  .fab-tooltip { display: none; position: fixed; bottom: 100px; right: 20px; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px 18px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 1001; font-size: 14px; color: #333; max-width: 260px; text-align: center; }',
+            '  .fab-tooltip.visible { display: block; animation: fadeIn 0.2s ease-out; }',
+            '  .fab-tooltip a { color: #500000; font-weight: 700; text-decoration: underline; }',
+            '  .fab-tooltip .fab-tooltip-arrow { position: absolute; bottom: -8px; right: 30px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid #fff; }',
+            '  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999; justify-content: center; align-items: flex-end; padding: 20px; }',
+            '  .modal-overlay.active { display: flex; }',
+            '  .ride-form-panel { background: #fff; border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; padding: 24px 20px 20px; box-shadow: 0 -4px 24px rgba(0,0,0,0.15); animation: slideUp 0.25s ease-out; }',
+            '  @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }',
+            '  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }',
+            '  .ride-form-panel h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: #1a1a1a; }',
+            '  .form-group { margin-bottom: 14px; }',
+            '  .form-label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }',
+            '  .form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #d0d0d0; border-radius: 8px; outline: none; transition: border-color 0.2s; font-family: inherit; background: #fff; }',
+            '  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #500000; }',
+            '  .form-textarea { resize: vertical; min-height: 60px; }',
+            '  .type-toggle { display: flex; border: 2px solid #500000; border-radius: 8px; overflow: hidden; }',
+            '  .type-toggle label { flex: 1; text-align: center; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s, color 0.2s; color: #500000; background: #fff; }',
+            '  .type-toggle input { display: none; }',
+            '  .type-toggle input:checked + label { background: #500000; color: #fff; }',
+            '  .other-input { display: none; margin-top: 6px; }',
+            '  .other-input.visible { display: block; }',
+            '  .form-submit { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: #500000; color: #fff; border: none; border-radius: 8px; cursor: pointer; margin-top: 8px; transition: background 0.2s; }',
+            '  .form-submit:hover { background: #6b0000; }',
+            '  .form-submit:disabled { background: #999; cursor: not-allowed; }',
+            '  .form-msg { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none; }',
+            '  .form-msg.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }',
+            '  .form-msg.success { display: block; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }',
+            '  .form-error { border-color: #ef4444 !important; background: #fef2f2 !important; }',
+            '  @media (max-width: 700px) {',
+            '    .fab { bottom: 20px; right: 20px; width: 54px; height: 54px; font-size: 28px; line-height: 54px; }',
+            '    .fab-tooltip { bottom: 86px; right: 12px; }',
+            '    .modal-overlay { padding: 0; }',
+            '    .ride-form-panel { max-height: 90vh; padding: 20px 16px 16px; }',
+            '  }',
             '</style>',
             '</head>',
             '<body>',
@@ -1172,6 +1300,92 @@ app.get('/', optionalAuth, async function(req, res) {
             dateBlocksHtml,
             '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; <a href="/faq">FAQ</a> &middot; <a href="/terms">Terms</a> &middot; v3.2</div>',
             '</div>',
+            '',
+            '<!-- FAB -->',
+            '<button class="fab" id="ride-fab" title="Post a ride" aria-label="Post a ride">+</button>',
+            '',
+            '<!-- Sign-in tooltip (unauthenticated) -->',
+            '<div class="fab-tooltip" id="fab-tooltip">',
+            '  <a href="/login">Sign in with @tamu.edu</a> to offer or post a ride',
+            '  <div class="fab-tooltip-arrow"></div>',
+            '</div>',
+            '',
+            '<!-- Ride form modal (authenticated) -->',
+            '<div class="modal-overlay" id="ride-modal">',
+            '  <div class="ride-form-panel">',
+            '    <h2>Post a Ride</h2>',
+            '    <div class="form-msg" id="form-msg"></div>',
+            '    <form id="ride-form" autocomplete="off">',
+            '      <div class="form-group">',
+            '        <div class="form-label">I am... <span style="color:#ef4444">*</span></div>',
+            '        <div class="type-toggle">',
+            '          <input type="radio" name="type" id="type-need" value="need">',
+            '          <label for="type-need">✋ Looking for a ride</label>',
+            '          <input type="radio" name="type" id="type-offer" value="offer">',
+            '          <label for="type-offer">🚗 Offering a ride</label>',
+            '        </div>',
+            '      </div>',
+            '      <div class="form-group">',
+            '        <label class="form-label" for="origin">From <span style="color:#ef4444">*</span></label>',
+            '        <select class="form-select" id="origin" name="origin">',
+            '          <option value="">Select origin...</option>',
+            '          <option value="College Station">College Station</option>',
+            '          <option value="Houston">Houston</option>',
+            '          <option value="Houston IAH">Houston IAH</option>',
+            '          <option value="Houston Hobby">Houston Hobby</option>',
+            '          <option value="Dallas">Dallas</option>',
+            '          <option value="Dallas DFW">Dallas DFW</option>',
+            '          <option value="Fort Worth">Fort Worth</option>',
+            '          <option value="Austin">Austin</option>',
+            '          <option value="Austin Airport">Austin Airport</option>',
+            '          <option value="San Antonio">San Antonio</option>',
+            '          <option value="Other">Other</option>',
+            '        </select>',
+            '        <input class="form-input other-input" id="origin-other" name="originOther" placeholder="Enter city/location" maxlength="100">',
+            '      </div>',
+            '      <div class="form-group">',
+            '        <label class="form-label" for="destination">To <span style="color:#ef4444">*</span></label>',
+            '        <select class="form-select" id="destination" name="destination">',
+            '          <option value="">Select destination...</option>',
+            '          <option value="College Station">College Station</option>',
+            '          <option value="Houston">Houston</option>',
+            '          <option value="Houston IAH">Houston IAH</option>',
+            '          <option value="Houston Hobby">Houston Hobby</option>',
+            '          <option value="Dallas">Dallas</option>',
+            '          <option value="Dallas DFW">Dallas DFW</option>',
+            '          <option value="Fort Worth">Fort Worth</option>',
+            '          <option value="Austin">Austin</option>',
+            '          <option value="Austin Airport">Austin Airport</option>',
+            '          <option value="San Antonio">San Antonio</option>',
+            '          <option value="Other">Other</option>',
+            '        </select>',
+            '        <input class="form-input other-input" id="dest-other" name="destOther" placeholder="Enter city/location" maxlength="100">',
+            '      </div>',
+            '      <div class="form-group">',
+            '        <label class="form-label" for="ride-date">Date <span style="color:#ef4444">*</span></label>',
+            '        <input class="form-input" type="date" id="ride-date" name="date" required>',
+            '      </div>',
+            '      <div class="form-group">',
+            '        <label class="form-label" for="ride-name">Name <span style="color:#ef4444">*</span></label>',
+            '        <input class="form-input" type="text" id="ride-name" name="name" placeholder="Your name" required maxlength="100">',
+            '      </div>',
+            '      <div class="form-group">',
+            '        <label class="form-label" for="ride-phone">Phone Number <span style="color:#ef4444">*</span></label>',
+            '        <input class="form-input" type="tel" id="ride-phone" name="phone" placeholder="(XXX) XXX-XXXX" required maxlength="20">',
+            '      </div>',
+            '      <div class="form-group">',
+            '        <label class="form-label" for="ride-time">Preferred Time <span style="color:#999;font-weight:400">(optional)</span></label>',
+            '        <input class="form-input" type="time" id="ride-time" name="time">',
+            '      </div>',
+            '      <div class="form-group">',
+            '        <label class="form-label" for="ride-comments">Comments <span style="color:#999;font-weight:400">(seats, charge, etc.)</span></label>',
+            '        <textarea class="form-textarea" id="ride-comments" name="comments" placeholder="e.g. 2 seats available, splitting gas" maxlength="500"></textarea>',
+            '      </div>',
+            '      <button class="form-submit" type="submit" id="form-submit-btn">Submit</button>',
+            '    </form>',
+            '  </div>',
+            '</div>',
+            '',
             '<script>',
             '(function() {',
             '  function updateClock() {',
@@ -1211,6 +1425,157 @@ app.get('/', optionalAuth, async function(req, res) {
             '    }',
             '    window.addEventListener("scroll", updateStickyDate, { passive: true });',
             '  }',
+            '',
+            '  // ── FAB + Form Logic ──────────────────────',
+            '  var isLoggedIn = !!document.querySelector(".auth-email-display");',
+            '  var fab = document.getElementById("ride-fab");',
+            '  var tooltip = document.getElementById("fab-tooltip");',
+            '  var modal = document.getElementById("ride-modal");',
+            '  var form = document.getElementById("ride-form");',
+            '  var msgEl = document.getElementById("form-msg");',
+            '  var submitBtn = document.getElementById("form-submit-btn");',
+            '',
+            '  // Set date min to today',
+            '  var dateInput = document.getElementById("ride-date");',
+            '  if (dateInput) {',
+            '    var d = new Date();',
+            '    var todayStr = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");',
+            '    dateInput.setAttribute("min", todayStr);',
+            '    dateInput.value = todayStr;',
+            '  }',
+            '',
+            '  // FAB click',
+            '  fab.addEventListener("click", function() {',
+            '    if (!isLoggedIn) {',
+            '      var vis = tooltip.classList.contains("visible");',
+            '      tooltip.classList.toggle("visible", !vis);',
+            '      return;',
+            '    }',
+            '    var isOpen = modal.classList.contains("active");',
+            '    if (isOpen) {',
+            '      modal.classList.remove("active");',
+            '      fab.classList.remove("open");',
+            '    } else {',
+            '      tooltip.classList.remove("visible");',
+            '      modal.classList.add("active");',
+            '      fab.classList.add("open");',
+            '      msgEl.className = "form-msg";',
+            '      msgEl.textContent = "";',
+            '    }',
+            '  });',
+            '',
+            '  // Close modal on overlay click',
+            '  modal.addEventListener("click", function(e) {',
+            '    if (e.target === modal) {',
+            '      modal.classList.remove("active");',
+            '      fab.classList.remove("open");',
+            '    }',
+            '  });',
+            '',
+            '  // Close on Escape',
+            '  document.addEventListener("keydown", function(e) {',
+            '    if (e.key === "Escape") {',
+            '      modal.classList.remove("active");',
+            '      fab.classList.remove("open");',
+            '      tooltip.classList.remove("visible");',
+            '    }',
+            '  });',
+            '',
+            '  // Close tooltip on outside click',
+            '  document.addEventListener("click", function(e) {',
+            '    if (!fab.contains(e.target) && !tooltip.contains(e.target)) {',
+            '      tooltip.classList.remove("visible");',
+            '    }',
+            '  });',
+            '',
+            '  // "Other" toggle for origin/destination',
+            '  document.getElementById("origin").addEventListener("change", function() {',
+            '    var oi = document.getElementById("origin-other");',
+            '    if (this.value === "Other") { oi.classList.add("visible"); oi.focus(); }',
+            '    else { oi.classList.remove("visible"); oi.value = ""; }',
+            '  });',
+            '  document.getElementById("destination").addEventListener("change", function() {',
+            '    var di = document.getElementById("dest-other");',
+            '    if (this.value === "Other") { di.classList.add("visible"); di.focus(); }',
+            '    else { di.classList.remove("visible"); di.value = ""; }',
+            '  });',
+            '',
+            '  // Form submit',
+            '  form.addEventListener("submit", async function(e) {',
+            '    e.preventDefault();',
+            '    msgEl.className = "form-msg";',
+            '    msgEl.textContent = "";',
+            '    submitBtn.disabled = true;',
+            '    submitBtn.textContent = "Submitting...";',
+            '',
+            '    // Clear previous error highlights',
+            '    var fieldMap = { type: ".type-toggle", origin: "#origin", destination: "#destination", date: "#ride-date", name: "#ride-name", phone: "#ride-phone" };',
+            '    Object.values(fieldMap).forEach(function(sel) {',
+            '      var el = document.querySelector(sel);',
+            '      if (el) el.classList.remove("form-error");',
+            '    });',
+            '',
+            '    function showError(msg, fields) {',
+            '      msgEl.className = "form-msg error";',
+            '      msgEl.textContent = msg;',
+            '      if (fields && fields.length) {',
+            '        fields.forEach(function(f) {',
+            '          var el = document.querySelector(fieldMap[f]);',
+            '          if (el) el.classList.add("form-error");',
+            '        });',
+            '      }',
+            '      document.querySelector(".ride-form-panel").scrollTo({ top: 0, behavior: "smooth" });',
+            '      submitBtn.disabled = false;',
+            '      submitBtn.textContent = "Submit";',
+            '    }',
+            '',
+            '    var typeEl = form.querySelector(\'input[name="type"]:checked\');',
+            '    if (!typeEl) {',
+            '      showError("Please select Looking or Offering.", ["type"]);',
+            '      return;',
+            '    }',
+            '',
+            '    var body = {',
+            '      type: typeEl.value,',
+            '      origin: form.querySelector("#origin").value,',
+            '      destination: form.querySelector("#destination").value,',
+            '      date: form.querySelector("#ride-date").value,',
+            '      name: form.querySelector("#ride-name").value.trim(),',
+            '      phone: form.querySelector("#ride-phone").value.trim(),',
+            '      time: form.querySelector("#ride-time").value || "",',
+            '      comments: form.querySelector("#ride-comments").value.trim(),',
+            '      originOther: (form.querySelector("#origin-other").value || "").trim(),',
+            '      destOther: (form.querySelector("#dest-other").value || "").trim()',
+            '    };',
+            '',
+            '    try {',
+            '      var resp = await fetch("/submit", {',
+            '        method: "POST",',
+            '        headers: { "Content-Type": "application/json" },',
+            '        body: JSON.stringify(body)',
+            '      });',
+            '      var data = await resp.json();',
+            '',
+            '      if (!resp.ok) {',
+            '        if (resp.status === 401) { window.location.href = "/login"; return; }',
+            '        showError(data.error || "Something went wrong.", data.fields || []);',
+            '        return;',
+            '      }',
+            '',
+            '      msgEl.className = "form-msg success";',
+            '      var matchMsg = data.matches > 0 ? " We found " + data.matches + " potential match(es)!" : "";',
+            '      msgEl.textContent = "Ride posted successfully!" + matchMsg;',
+            '      submitBtn.textContent = "Done!";',
+            '      document.querySelector(".ride-form-panel").scrollTo({ top: 0, behavior: "smooth" });',
+            '      setTimeout(function() {',
+            '        modal.classList.remove("active");',
+            '        fab.classList.remove("open");',
+            '        window.location.reload();',
+            '      }, 2000);',
+            '    } catch (err) {',
+            '      showError("Network error. Please try again.", []);',
+            '    }',
+            '  });',
             '})()',
             '</script>',
             '</body>',
