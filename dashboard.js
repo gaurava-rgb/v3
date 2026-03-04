@@ -488,7 +488,7 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
         return '<tr class="' + dirClass + '">' +
             '<td class="col-type">' + emoji + '</td>' +
             '<td class="col-name">' + escHtml(name) + '</td>' +
-            '<td class="col-phone">' + escHtml(phone) + (isLoggedIn && r.source_contact ? ' <a href="https://wa.me/' + escHtml(r.source_contact) + '" target="_blank" rel="noopener" title="Chat on WhatsApp" class="wa-link" onclick="gtag(\'event\',\'wa_click\',{route:\'' + escHtml((r.request_origin || '') + ' to ' + (r.request_destination || '')) + '\',type:\'' + escHtml(r.request_type || '') + '\',date:\'' + escHtml(r.ride_plan_date || '') + '\'})"><svg viewBox="0 0 32 32" class="wa-icon"><path fill="#25D366" d="M16.01 2.64C8.63 2.64 2.65 8.6 2.65 15.97c0 2.35.62 4.65 1.8 6.68L2.5 29.36l6.89-1.81a13.34 13.34 0 006.6 1.74h.01c7.37 0 13.36-5.97 13.36-13.33 0-3.56-1.39-6.91-3.9-9.43a13.27 13.27 0 00-9.45-3.89zm0 24.38a11.07 11.07 0 01-5.64-1.54l-.4-.24-4.2 1.1 1.12-4.1-.26-.42a11.03 11.03 0 01-1.7-5.86c0-6.12 4.98-11.1 11.1-11.1 2.97 0 5.75 1.16 7.85 3.26a11.03 11.03 0 013.24 7.85c0 6.13-4.99 11.1-11.11 11.1v-.05zm6.1-8.31c-.34-.17-1.98-1-2.29-1.1-.31-.12-.53-.17-.75.17-.22.34-.86 1.1-1.05 1.32-.2.22-.39.24-.72.08-.34-.17-1.42-.52-2.7-1.67-1-1.2-1.67-2.15-1.87-2.49-.2-.34-.02-.52.15-.69.15-.15.34-.39.5-.59.17-.2.22-.34.34-.56.11-.22.05-.42-.03-.59-.08-.17-.75-1.82-1.03-2.49-.27-.65-.55-.56-.75-.57h-.64c-.22 0-.59.08-.89.42-.31.34-1.17 1.14-1.17 2.78s1.2 3.22 1.36 3.44c.17.22 2.36 3.6 5.72 5.05.8.34 1.42.55 1.91.7.8.26 1.53.22 2.1.14.65-.1 1.98-.81 2.26-1.6.28-.78.28-1.45.2-1.59-.09-.14-.31-.22-.65-.39z"/></svg></a>' : '') + '</td>' +
+            '<td class="col-phone">' + escHtml(phone) + (isLoggedIn && r.source_contact ? ' <a href="https://wa.me/' + escHtml(r.source_contact) + '" target="_blank" rel="noopener" title="Chat on WhatsApp" class="wa-link" onclick="logWaClick(\'' + escHtml((r.request_origin || '') + ' to ' + (r.request_destination || '')) + '\',\'' + escHtml(r.request_type || '') + '\',\'' + escHtml(r.ride_plan_date || '') + '\')"><svg viewBox="0 0 32 32" class="wa-icon"><path fill="#25D366" d="M16.01 2.64C8.63 2.64 2.65 8.6 2.65 15.97c0 2.35.62 4.65 1.8 6.68L2.5 29.36l6.89-1.81a13.34 13.34 0 006.6 1.74h.01c7.37 0 13.36-5.97 13.36-13.33 0-3.56-1.39-6.91-3.9-9.43a13.27 13.27 0 00-9.45-3.89zm0 24.38a11.07 11.07 0 01-5.64-1.54l-.4-.24-4.2 1.1 1.12-4.1-.26-.42a11.03 11.03 0 01-1.7-5.86c0-6.12 4.98-11.1 11.1-11.1 2.97 0 5.75 1.16 7.85 3.26a11.03 11.03 0 013.24 7.85c0 6.13-4.99 11.1-11.11 11.1v-.05zm6.1-8.31c-.34-.17-1.98-1-2.29-1.1-.31-.12-.53-.17-.75.17-.22.34-.86 1.1-1.05 1.32-.2.22-.39.24-.72.08-.34-.17-1.42-.52-2.7-1.67-1-1.2-1.67-2.15-1.87-2.49-.2-.34-.02-.52.15-.69.15-.15.34-.39.5-.59.17-.2.22-.34.34-.56.11-.22.05-.42-.03-.59-.08-.17-.75-1.82-1.03-2.49-.27-.65-.55-.56-.75-.57h-.64c-.22 0-.59.08-.89.42-.31.34-1.17 1.14-1.17 2.78s1.2 3.22 1.36 3.44c.17.22 2.36 3.6 5.72 5.05.8.34 1.42.55 1.91.7.8.26 1.53.22 2.1.14.65-.1 1.98-.81 2.26-1.6.28-.78.28-1.45.2-1.59-.09-.14-.31-.22-.65-.39z"/></svg></a>' : '') + '</td>' +
             '<td class="col-route">' + route + '</td>' +
             '<td class="col-msg">' + msg + '</td>' +
             '<td class="col-time">sent ' + escHtml(time) + '</td>' +
@@ -889,6 +889,25 @@ app.post('/verify', async function(req, res) {
 app.get('/logout', function(req, res) {
     clearAuthCookies(res);
     res.redirect('/');
+});
+
+// ── Log WhatsApp Click ──────────────────────────────────────────────────
+
+app.post('/log-click', optionalAuth, async function(req, res) {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    try {
+        var { route, type, date } = req.body;
+        await supabase.from('wa_click_log').insert({
+            route: route || null,
+            ride_type: type || null,
+            ride_date: date || null,
+            user_email: req.user.email
+        });
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('log-click error:', e.message);
+        res.json({ ok: false });
+    }
 });
 
 // ── Submit Ride (Web Form) ───────────────────────────────────────────────
@@ -1426,6 +1445,12 @@ app.get('/', optionalAuth, async function(req, res) {
             '      }',
             '    }',
             '    window.addEventListener("scroll", updateStickyDate, { passive: true });',
+            '  }',
+            '',
+            '  // ── WhatsApp Click Logger ─────────────────',
+            '  window.logWaClick = function(route, type, date) {',
+            '    gtag("event","wa_click",{route:route,type:type,date:date});',
+            '    fetch("/log-click",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({route:route,type:type,date:date})}).catch(function(){});',
             '  }',
             '',
             '  // ── FAB + Form Logic ──────────────────────',
