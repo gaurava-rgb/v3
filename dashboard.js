@@ -488,7 +488,7 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
         return '<tr class="' + dirClass + '">' +
             '<td class="col-type">' + emoji + '</td>' +
             '<td class="col-name">' + escHtml(name) + '</td>' +
-            '<td class="col-phone">' + escHtml(phone) + '</td>' +
+            '<td class="col-phone">' + escHtml(phone) + (isLoggedIn && r.source_contact ? ' <a href="https://wa.me/' + escHtml(r.source_contact) + '" target="_blank" rel="noopener" title="Chat on WhatsApp" class="wa-link"><svg viewBox="0 0 32 32" class="wa-icon"><path fill="#25D366" d="M16.01 2.64C8.63 2.64 2.65 8.6 2.65 15.97c0 2.35.62 4.65 1.8 6.68L2.5 29.36l6.89-1.81a13.34 13.34 0 006.6 1.74h.01c7.37 0 13.36-5.97 13.36-13.33 0-3.56-1.39-6.91-3.9-9.43a13.27 13.27 0 00-9.45-3.89zm0 24.38a11.07 11.07 0 01-5.64-1.54l-.4-.24-4.2 1.1 1.12-4.1-.26-.42a11.03 11.03 0 01-1.7-5.86c0-6.12 4.98-11.1 11.1-11.1 2.97 0 5.75 1.16 7.85 3.26a11.03 11.03 0 013.24 7.85c0 6.13-4.99 11.1-11.11 11.1v-.05zm6.1-8.31c-.34-.17-1.98-1-2.29-1.1-.31-.12-.53-.17-.75.17-.22.34-.86 1.1-1.05 1.32-.2.22-.39.24-.72.08-.34-.17-1.42-.52-2.7-1.67-1-1.2-1.67-2.15-1.87-2.49-.2-.34-.02-.52.15-.69.15-.15.34-.39.5-.59.17-.2.22-.34.34-.56.11-.22.05-.42-.03-.59-.08-.17-.75-1.82-1.03-2.49-.27-.65-.55-.56-.75-.57h-.64c-.22 0-.59.08-.89.42-.31.34-1.17 1.14-1.17 2.78s1.2 3.22 1.36 3.44c.17.22 2.36 3.6 5.72 5.05.8.34 1.42.55 1.91.7.8.26 1.53.22 2.1.14.65-.1 1.98-.81 2.26-1.6.28-.78.28-1.45.2-1.59-.09-.14-.31-.22-.65-.39z"/></svg></a>' : '') + '</td>' +
             '<td class="col-route">' + route + '</td>' +
             '<td class="col-msg">' + msg + '</td>' +
             '<td class="col-time">sent ' + escHtml(time) + '</td>' +
@@ -1200,6 +1200,8 @@ app.get('/', optionalAuth, async function(req, res) {
             '  .col-type { width: 30px; text-align: center; font-size: 14px; }',
             '  .col-name { font-weight: 600; white-space: nowrap; color: #333; }',
             '  .col-phone { white-space: nowrap; color: #888; font-size: 12px; }',
+            '  .wa-link { display: inline-block; vertical-align: middle; margin-left: 4px; }',
+            '  .wa-icon { width: 16px; height: 16px; vertical-align: middle; }',
             '  .col-route { white-space: nowrap; color: #555; }',
             '  .col-msg { color: #666; min-width: 200px; }',
             '  .col-time { white-space: nowrap; color: #999; font-size: 12px; text-align: right; }',
