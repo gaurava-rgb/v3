@@ -484,14 +484,23 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
         var phone = displayPhone(r, isLoggedIn);
         var route = escHtml(r.request_origin || '?') + ' → ' + escHtml(r.request_destination || '?');
         var msg = r.raw_message ? escHtml(r.raw_message) : '';
-        var time = r.ride_plan_time ? formatTime(r.ride_plan_time) : formatMsgTime(r.created_at);
+        var depart = '';
+        if (r.ride_plan_time) {
+            if (/^\d{1,2}:\d{2}$/.test(r.ride_plan_time)) {
+                depart = (r.time_fuzzy ? '~' : '') + formatTime(r.ride_plan_time);
+            } else {
+                depart = r.ride_plan_time;
+            }
+        }
+        var sentTime = formatMsgTime(r.created_at);
         return '<tr class="' + dirClass + '">' +
             '<td class="col-type">' + emoji + '</td>' +
             '<td class="col-name">' + escHtml(name) + '</td>' +
             '<td class="col-phone">' + escHtml(phone) + (isLoggedIn && r.source_contact ? ' <a href="https://wa.me/' + escHtml(r.source_contact) + '" target="_blank" rel="noopener" title="Chat on WhatsApp" class="wa-link" onclick="logWaClick(\'' + escHtml((r.request_origin || '') + ' to ' + (r.request_destination || '')) + '\',\'' + escHtml(r.request_type || '') + '\',\'' + escHtml(r.ride_plan_date || '') + '\')"><svg viewBox="0 0 32 32" class="wa-icon"><path fill="#25D366" d="M16.01 2.64C8.63 2.64 2.65 8.6 2.65 15.97c0 2.35.62 4.65 1.8 6.68L2.5 29.36l6.89-1.81a13.34 13.34 0 006.6 1.74h.01c7.37 0 13.36-5.97 13.36-13.33 0-3.56-1.39-6.91-3.9-9.43a13.27 13.27 0 00-9.45-3.89zm0 24.38a11.07 11.07 0 01-5.64-1.54l-.4-.24-4.2 1.1 1.12-4.1-.26-.42a11.03 11.03 0 01-1.7-5.86c0-6.12 4.98-11.1 11.1-11.1 2.97 0 5.75 1.16 7.85 3.26a11.03 11.03 0 013.24 7.85c0 6.13-4.99 11.1-11.11 11.1v-.05zm6.1-8.31c-.34-.17-1.98-1-2.29-1.1-.31-.12-.53-.17-.75.17-.22.34-.86 1.1-1.05 1.32-.2.22-.39.24-.72.08-.34-.17-1.42-.52-2.7-1.67-1-1.2-1.67-2.15-1.87-2.49-.2-.34-.02-.52.15-.69.15-.15.34-.39.5-.59.17-.2.22-.34.34-.56.11-.22.05-.42-.03-.59-.08-.17-.75-1.82-1.03-2.49-.27-.65-.55-.56-.75-.57h-.64c-.22 0-.59.08-.89.42-.31.34-1.17 1.14-1.17 2.78s1.2 3.22 1.36 3.44c.17.22 2.36 3.6 5.72 5.05.8.34 1.42.55 1.91.7.8.26 1.53.22 2.1.14.65-.1 1.98-.81 2.26-1.6.28-.78.28-1.45.2-1.59-.09-.14-.31-.22-.65-.39z"/></svg></a>' : '') + '</td>' +
             '<td class="col-route">' + route + '</td>' +
             '<td class="col-msg">' + msg + '</td>' +
-            '<td class="col-time">sent ' + escHtml(time) + '</td>' +
+            '<td class="col-depart">' + (depart ? escHtml(depart) : '<span class="na">—</span>') + '</td>' +
+            '<td class="col-time">' + escHtml(sentTime) + '</td>' +
             '</tr>';
     }
 
@@ -500,16 +509,21 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
     var sortedArriving = sortGroup(grouped.arriving);
     var sortedOthers = sortGroup(grouped.others);
 
+    var colHeaders = '<tr class="col-headers"><th class="col-type"></th><th class="col-name">Name</th><th class="col-phone">Phone</th><th class="col-route">Route</th><th class="col-msg">Message</th><th class="col-depart">Departs at</th><th class="col-time">Sent</th></tr>';
+
     if (sortedLeaving.length > 0) {
-        rows.push('<tr class="section-header section-leaving"><td colspan="6">↑ Leaving College Station (' + sortedLeaving.length + ')</td></tr>');
+        rows.push('<tr class="section-header section-leaving"><td colspan="7">↑ Leaving College Station (' + sortedLeaving.length + ')</td></tr>');
+        rows.push(colHeaders);
         for (var i = 0; i < sortedLeaving.length; i++) rows.push(renderRow(sortedLeaving[i], 'row-leaving'));
     }
     if (sortedArriving.length > 0) {
-        rows.push('<tr class="section-header section-arriving"><td colspan="6">↓ Coming to College Station (' + sortedArriving.length + ')</td></tr>');
+        rows.push('<tr class="section-header section-arriving"><td colspan="7">↓ Coming to College Station (' + sortedArriving.length + ')</td></tr>');
+        rows.push(colHeaders);
         for (var i = 0; i < sortedArriving.length; i++) rows.push(renderRow(sortedArriving[i], 'row-arriving'));
     }
     if (sortedOthers.length > 0) {
-        rows.push('<tr class="section-header section-others"><td colspan="6">Other Routes (' + sortedOthers.length + ')</td></tr>');
+        rows.push('<tr class="section-header section-others"><td colspan="7">Other Routes (' + sortedOthers.length + ')</td></tr>');
+        rows.push(colHeaders);
         for (var i = 0; i < sortedOthers.length; i++) rows.push(renderRow(sortedOthers[i], 'row-others'));
     }
 
@@ -551,7 +565,7 @@ async function fetchOpenMatches(showAll) {
 
     var reqResult = await supabase
         .from('v3_requests')
-        .select('id, source_group, source_contact, sender_name, request_type, ride_plan_date, ride_plan_time, request_origin, request_destination, raw_message, created_at')
+        .select('id, source_group, source_contact, sender_name, request_type, ride_plan_date, ride_plan_time, time_fuzzy, request_origin, request_destination, raw_message, created_at')
         .in('id', requestIds);
     if (reqResult.error) throw new Error('Failed to fetch requests: ' + reqResult.error.message);
 
@@ -629,7 +643,7 @@ async function fetchSameWayClusters() {
     var today = new Date().toISOString().split('T')[0];
 
     var results = await Promise.all([
-        supabase.from('v3_requests').select('id, source_group, source_contact, sender_name, request_type, request_category, ride_plan_date, ride_plan_time, date_fuzzy, possible_dates, request_origin, request_destination, raw_message, created_at')
+        supabase.from('v3_requests').select('id, source_group, source_contact, sender_name, request_type, request_category, ride_plan_date, ride_plan_time, time_fuzzy, date_fuzzy, possible_dates, request_origin, request_destination, raw_message, created_at')
             .eq('request_category', 'ride')
             .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
             .order('created_at', { ascending: false }),
@@ -1214,7 +1228,7 @@ app.get('/', optionalAuth, async function(req, res) {
             '  .today-badge { display: inline-block; background: #dcfce7; color: #16a34a; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; }',
             '  .date-summary { margin-left: auto; font-size: 11px; font-weight: 400; color: #999; }',
             '  .ride-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }',
-            '  .ride-table td { border: 1px solid #e8e8e8; padding: 5px 10px; vertical-align: top; }',
+            '  .ride-table td, .ride-table th { border: 1px solid #e8e8e8; padding: 5px 10px; vertical-align: top; }',
             '  .ride-table tr:hover { background: #f5f5f5; }',
             '  .col-type { width: 30px; text-align: center; font-size: 14px; }',
             '  .col-name { font-weight: 600; white-space: nowrap; color: #333; }',
@@ -1222,9 +1236,13 @@ app.get('/', optionalAuth, async function(req, res) {
             '  .wa-link { display: inline-block; vertical-align: middle; margin-left: 4px; }',
             '  .wa-icon { width: 16px; height: 16px; vertical-align: middle; }',
             '  .col-route { white-space: nowrap; color: #555; }',
-            '  .col-msg { color: #666; min-width: 200px; }',
+            '  .col-msg { color: #666; max-width: 320px; word-wrap: break-word; overflow-wrap: break-word; }',
+            '  .col-depart { white-space: nowrap; color: #555; font-size: 12px; text-align: right; font-weight: 600; }',
+            '  .col-depart .na { color: #ccc; font-weight: 400; }',
             '  .col-time { white-space: nowrap; color: #999; font-size: 12px; text-align: right; }',
-            '  .section-header td { padding: 4px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid #e8e8e8; }',
+            '  .col-headers th { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 10px; background: #f5f5f0; border: 1px solid #e8e8e8; position: sticky; top: 60px; z-index: 8; }',
+            '  .col-headers .col-depart, .col-headers .col-time { text-align: right; }',
+            '  .section-header td { padding: 4px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid #e8e8e8; position: sticky; top: 37px; z-index: 9; }',
             '  .section-leaving td { background: #dbeafe; color: #1d4ed8; }',
             '  .section-arriving td { background: #dcfce7; color: #16a34a; }',
             '  .section-others td { background: #f3f4f6; color: #6b7280; }',
@@ -1256,10 +1274,11 @@ app.get('/', optionalAuth, async function(req, res) {
             '    .clock { font-size: 11px; }',
             '    .auth-banner { font-size: 12px; padding: 8px 32px 8px 12px; text-align: center; }',
             '    .date-label { font-size: 13px; }',
+            '    .col-headers { display: none; }',
             '    .date-block { overflow-x: auto; -webkit-overflow-scrolling: touch; }',
             '    .ride-table { font-size: 12px; min-width: 600px; }',
             '    .ride-table td { padding: 4px 6px; }',
-            '    .col-msg { min-width: 150px; }',
+            '    .col-msg { max-width: 180px; }',
             '  }',
             '  .fab { position: fixed; bottom: 28px; right: 28px; width: 60px; height: 60px; border-radius: 50%; background: #500000; color: #fff; border: none; font-size: 32px; line-height: 60px; text-align: center; cursor: pointer; box-shadow: 0 4px 16px rgba(80,0,0,0.35); z-index: 1000; transition: transform 0.2s, background 0.2s; }',
             '  .fab:hover { background: #6b0000; transform: scale(1.08); }',
