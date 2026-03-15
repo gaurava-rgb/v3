@@ -231,6 +231,19 @@ function escHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+var ROUTE_SHORT = {
+    'college station': 'CS', 'cstat': 'CS', 'c station': 'CS',
+    'houston': 'HOU', 'houston iah': 'IAH', 'houston hobby': 'HOU Hobby',
+    'dallas': 'Dallas', 'dallas dfw': 'DFW', 'dallas love': 'DAL',
+    'austin': 'Austin', 'austin airport': 'AUS',
+    'san antonio': 'SA', 'waco': 'Waco', 'bryan': 'Bryan',
+    'denton': 'Denton', 'towerpark': 'Towerpark'
+};
+function shortRoute(place) {
+    if (!place) return '?';
+    return ROUTE_SHORT[place.toLowerCase().trim()] || place;
+}
+
 function redactPhone(phone) {
     if (!phone) return '';
     const s = String(phone).trim();
@@ -280,6 +293,12 @@ function formatDate(d) {
     if (date.getTime() === today.getTime()) return 'Today, ' + base;
     if (date.getTime() === tomorrow.getTime()) return 'Tomorrow, ' + base;
     return base;
+}
+
+function shortDate(d) {
+    if (!d) return '';
+    var date = new Date(d + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function formatTime(t) {
@@ -482,15 +501,22 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
         var emoji = isOffer ? '🚗' : '✋';
         var name = displayName(r, isLoggedIn);
         var phone = displayPhone(r, isLoggedIn);
-        var route = escHtml(r.request_origin || '?') + ' → ' + escHtml(r.request_destination || '?');
+        var routeFull = escHtml(r.request_origin || '?') + ' → ' + escHtml(r.request_destination || '?');
+        var routeShort = escHtml(shortRoute(r.request_origin)) + ' → ' + escHtml(shortRoute(r.request_destination));
+        var route = '<span class="route-full">' + routeFull + '</span><span class="route-short">' + routeShort + '</span>';
         var msg = r.raw_message ? escHtml(r.raw_message) : '';
         var depart = '';
+        var departMobile = '';
+        var sd = shortDate(r.ride_plan_date);
         if (r.ride_plan_time) {
             if (/^\d{1,2}:\d{2}$/.test(r.ride_plan_time)) {
                 depart = (r.time_fuzzy ? '~' : '') + formatTime(r.ride_plan_time);
             } else {
                 depart = r.ride_plan_time;
             }
+            departMobile = sd ? sd + ', ' + depart : depart;
+        } else {
+            departMobile = sd || '';
         }
         var sentTime = formatMsgTime(r.created_at);
         return '<tr class="' + dirClass + '">' +
@@ -498,8 +524,8 @@ function renderDateTable(dateKey, requests, isLoggedIn) {
             '<td class="col-name">' + escHtml(name) + '</td>' +
             '<td class="col-phone">' + escHtml(phone) + (isLoggedIn && r.source_contact ? ' <a href="https://wa.me/' + escHtml(r.source_contact) + '" target="_blank" rel="noopener" title="Chat on WhatsApp" class="wa-link" onclick="logWaClick(\'' + escHtml((r.request_origin || '') + ' to ' + (r.request_destination || '')) + '\',\'' + escHtml(r.request_type || '') + '\',\'' + escHtml(r.ride_plan_date || '') + '\')"><svg viewBox="0 0 32 32" class="wa-icon"><path fill="#25D366" d="M16.01 2.64C8.63 2.64 2.65 8.6 2.65 15.97c0 2.35.62 4.65 1.8 6.68L2.5 29.36l6.89-1.81a13.34 13.34 0 006.6 1.74h.01c7.37 0 13.36-5.97 13.36-13.33 0-3.56-1.39-6.91-3.9-9.43a13.27 13.27 0 00-9.45-3.89zm0 24.38a11.07 11.07 0 01-5.64-1.54l-.4-.24-4.2 1.1 1.12-4.1-.26-.42a11.03 11.03 0 01-1.7-5.86c0-6.12 4.98-11.1 11.1-11.1 2.97 0 5.75 1.16 7.85 3.26a11.03 11.03 0 013.24 7.85c0 6.13-4.99 11.1-11.11 11.1v-.05zm6.1-8.31c-.34-.17-1.98-1-2.29-1.1-.31-.12-.53-.17-.75.17-.22.34-.86 1.1-1.05 1.32-.2.22-.39.24-.72.08-.34-.17-1.42-.52-2.7-1.67-1-1.2-1.67-2.15-1.87-2.49-.2-.34-.02-.52.15-.69.15-.15.34-.39.5-.59.17-.2.22-.34.34-.56.11-.22.05-.42-.03-.59-.08-.17-.75-1.82-1.03-2.49-.27-.65-.55-.56-.75-.57h-.64c-.22 0-.59.08-.89.42-.31.34-1.17 1.14-1.17 2.78s1.2 3.22 1.36 3.44c.17.22 2.36 3.6 5.72 5.05.8.34 1.42.55 1.91.7.8.26 1.53.22 2.1.14.65-.1 1.98-.81 2.26-1.6.28-.78.28-1.45.2-1.59-.09-.14-.31-.22-.65-.39z"/></svg></a>' : '') + '</td>' +
             '<td class="col-route">' + route + '</td>' +
-            '<td class="col-msg">' + msg + '</td>' +
-            '<td class="col-depart">' + (depart ? escHtml(depart) : '<span class="na">—</span>') + '</td>' +
+            '<td class="col-msg">' + msg + '<span class="msg-sent">' + escHtml(sentTime) + '</span></td>' +
+            '<td class="col-depart">' + (depart ? '<span class="depart-full">' + escHtml(depart) + '</span>' : '<span class="depart-full na">—</span>') + '<span class="depart-mobile">' + (departMobile ? escHtml(departMobile) : '<span class="na">—</span>') + '</span></td>' +
             '<td class="col-time">' + escHtml(sentTime) + '</td>' +
             '</tr>';
     }
@@ -641,6 +667,7 @@ async function markNotified(matchIds) {
 
 async function fetchSameWayClusters() {
     var today = new Date().toISOString().split('T')[0];
+    var cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
 
     var results = await Promise.all([
         supabase.from('v3_requests').select('id, source_group, source_contact, sender_name, request_type, request_category, ride_plan_date, ride_plan_time, time_fuzzy, date_fuzzy, possible_dates, request_origin, request_destination, raw_message, created_at')
@@ -664,7 +691,14 @@ async function fetchSameWayClusters() {
 
     var rawReqs = results[0].data || [];
     var allReqs = rawReqs.filter(function(r) {
-        return !r.source_group || !testGroups.has(r.source_group);
+        if (r.source_group && testGroups.has(r.source_group)) return false;
+        if (r.ride_plan_date && r.ride_plan_date >= today) return true;
+        if (r.ride_plan_date && r.ride_plan_date < today) return false;
+        if (r.date_fuzzy && Array.isArray(r.possible_dates) && r.possible_dates.length > 0) {
+            return r.possible_dates.some(function(d) { return d >= today; });
+        }
+        if (r.created_at && r.created_at < cutoff) return false;
+        return true;
     });
 
     // Attach resolved group names
@@ -1129,6 +1163,8 @@ app.get('/faq', async function(req, res) {
 app.get('/', optionalAuth, async function(req, res) {
     try {
         var today = new Date().toISOString().split('T')[0];
+        // Cutoff for fuzzy/null-date rides: only show if created within last 5 days
+        var cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
 
         var results = await Promise.all([
             supabase.from('v3_requests').select('*')
@@ -1154,7 +1190,18 @@ app.get('/', optionalAuth, async function(req, res) {
 
         var rawReqs = results[0].data || [];
         var allReqs = rawReqs.filter(function(r) {
-            return !r.source_group || !testGroupFilter.has(r.source_group);
+            if (r.source_group && testGroupFilter.has(r.source_group)) return false;
+            // For rides with a concrete future date, always show
+            if (r.ride_plan_date && r.ride_plan_date >= today) return true;
+            // Past ride_plan_date — drop it even if date_fuzzy
+            if (r.ride_plan_date && r.ride_plan_date < today) return false;
+            // Fuzzy with possible_dates: keep if any date is still >= today
+            if (r.date_fuzzy && Array.isArray(r.possible_dates) && r.possible_dates.length > 0) {
+                return r.possible_dates.some(function(d) { return d >= today; });
+            }
+            // No date at all — only show if created recently
+            if (r.created_at && r.created_at < cutoff) return false;
+            return true;
         });
 
         // Group by date
@@ -1227,10 +1274,12 @@ app.get('/', optionalAuth, async function(req, res) {
             '  .date-label { font-size: 14px; font-weight: 700; color: #333; padding: 6px 0 4px; border-bottom: 2px solid #e0e0e0; margin-bottom: 0; display: flex; align-items: center; gap: 8px; }',
             '  .today-badge { display: inline-block; background: #dcfce7; color: #16a34a; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; }',
             '  .date-summary { margin-left: auto; font-size: 11px; font-weight: 400; color: #999; }',
-            '  .ride-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }',
-            '  .ride-table td, .ride-table th { border: 1px solid #e8e8e8; padding: 5px 10px; vertical-align: top; }',
+            '  .ride-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; margin-bottom: 4px; }',
+            '  .ride-table td, .ride-table th { border: 1px solid #e8e8e8; border-top: none; padding: 5px 10px; vertical-align: top; }',
+            '  .ride-table tr:first-child td, .ride-table tr:first-child th { border-top: 1px solid #e8e8e8; }',
             '  .ride-table tr:hover { background: #f5f5f5; }',
             '  .col-type { width: 30px; text-align: center; font-size: 14px; }',
+            '  .route-short { display: none; }',
             '  .col-name { font-weight: 600; white-space: nowrap; color: #333; }',
             '  .col-phone { white-space: nowrap; color: #888; font-size: 12px; }',
             '  .wa-link { display: inline-block; vertical-align: middle; margin-left: 4px; }',
@@ -1239,9 +1288,12 @@ app.get('/', optionalAuth, async function(req, res) {
             '  .col-msg { color: #666; max-width: 320px; word-wrap: break-word; overflow-wrap: break-word; }',
             '  .col-depart { white-space: nowrap; color: #555; font-size: 12px; text-align: right; font-weight: 600; }',
             '  .col-depart .na { color: #ccc; font-weight: 400; }',
+            '  .depart-mobile { display: none; }',
+            '  .mobile-col-header { display: none; }',
             '  .col-time { white-space: nowrap; color: #999; font-size: 12px; text-align: right; }',
-            '  .col-headers th { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 10px; background: #f5f5f0; border: 1px solid #e8e8e8; position: sticky; top: 60px; z-index: 8; }',
+            '  .col-headers th { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 10px; background: #f5f5f0; border: 1px solid #e8e8e8; border-top: none; position: sticky; top: 60px; z-index: 8; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }',
             '  .col-headers .col-depart, .col-headers .col-time { text-align: right; }',
+            '  .msg-sent { display: none; }',
             '  .section-header td { padding: 4px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid #e8e8e8; position: sticky; top: 37px; z-index: 9; }',
             '  .section-leaving td { background: #dbeafe; color: #1d4ed8; }',
             '  .section-arriving td { background: #dcfce7; color: #16a34a; }',
@@ -1262,23 +1314,38 @@ app.get('/', optionalAuth, async function(req, res) {
             '  .auth-banner-close { cursor: pointer; color: #92400e; font-size: 18px; line-height: 1; opacity: 0.6; background: none; border: none; position: absolute; right: 12px; }',
             '  .auth-banner-close:hover { opacity: 1; }',
             '  @media (max-width: 700px) {',
-            '    .container { padding: 12px 8px; }',
-            '    .hero h1 { font-size: 18px; }',
-            '    .hero .subtitle { font-size: 12px; }',
-            '    .hero .tagline { font-size: 11px; }',
-            '    .legend { flex-direction: column; gap: 4px; padding: 6px 0; position: sticky; top: 0; }',
-            '    .legend-right { position: static; justify-content: center; }',
-            '    .legend-date { position: static; opacity: 1; justify-content: center; font-size: 12px; }',
-            '    .legend-item { font-size: 12px; }',
-            '    .auth-link { font-size: 11px; }',
-            '    .clock { font-size: 11px; }',
-            '    .auth-banner { font-size: 12px; padding: 8px 32px 8px 12px; text-align: center; }',
-            '    .date-label { font-size: 13px; }',
+            '    .container { padding: 8px 4px; }',
+            '    .hero { display: none; }',
+            '    .legend { flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 6px 8px; position: sticky; top: 0; font-size: 12px; justify-content: center; }',
+            '    .legend-right { position: static; display: flex; gap: 6px; }',
+            '    .legend-date { display: none; }',
+            '    .legend-item { font-size: 11px; }',
+            '    .auth-link { font-size: 10px; }',
+            '    .clock { font-size: 10px; }',
+            '    .auth-banner { font-size: 11px; padding: 6px 28px 6px 8px; text-align: center; }',
+            '    .date-label { font-size: 13px; font-weight: 700; }',
+            '    .section-header td { position: static; font-size: 10px; padding: 3px 6px; }',
             '    .col-headers { display: none; }',
-            '    .date-block { overflow-x: auto; -webkit-overflow-scrolling: touch; }',
-            '    .ride-table { font-size: 12px; min-width: 600px; }',
-            '    .ride-table td { padding: 4px 6px; }',
-            '    .col-msg { max-width: 180px; }',
+            '    .mobile-col-header { display: flex; position: sticky; top: 30px; z-index: 15; background: #f5f5f0; border-bottom: 1px solid #e8e8e8; padding: 3px 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: #888; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }',
+            '    .mobile-col-header span:nth-child(1) { width: 26px; flex-shrink: 0; }',
+            '    .mobile-col-header span:nth-child(2) { flex: 1; }',
+            '    .mobile-col-header span:nth-child(3) { flex: 2; }',
+            '    .mobile-col-header span:nth-child(4) { width: 80px; flex-shrink: 0; text-align: right; }',
+            '    .ride-table { font-size: 12px; min-width: 0; width: 100%; }',
+            '    .ride-table td, .ride-table th { padding: 5px 4px; }',
+            '    .col-type { width: 26px; }',
+            '    .col-name { display: none; }',
+            '    .col-phone { display: none; }',
+            '    .col-route { white-space: normal; font-size: 11px; word-break: break-word; }',
+            '    .route-full { display: inline; }',
+            '    .route-short { display: none; }',
+            '    .msg-sent { display: block; font-size: 9px; color: #aaa; margin-top: 2px; }',
+            '    .col-msg { max-width: none; font-size: 11px; }',
+            '    .col-depart { font-size: 11px; white-space: nowrap; }',
+            '    .depart-full { display: none; }',
+            '    .depart-mobile { display: inline; }',
+            '    .col-time { display: none; }',
+        
             '  }',
             '  .fab { position: fixed; bottom: 28px; right: 28px; width: 60px; height: 60px; border-radius: 50%; background: #500000; color: #fff; border: none; font-size: 32px; line-height: 60px; text-align: center; cursor: pointer; box-shadow: 0 4px 16px rgba(80,0,0,0.35); z-index: 1000; transition: transform 0.2s, background 0.2s; }',
             '  .fab:hover { background: #6b0000; transform: scale(1.08); }',
@@ -1337,6 +1404,7 @@ app.get('/', optionalAuth, async function(req, res) {
             '    </div>',
             '  </div>',
             isLoggedIn ? '' : '  <div class="auth-banner" id="auth-banner"><span>🔒 Names and phone numbers are redacted. &nbsp;<a href="/login">Sign in with your @tamu.edu email</a>&nbsp; to see full contact details.</span><button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'">&times;</button></div>',
+            '  <div class="mobile-col-header"><span></span><span>Route</span><span>Message</span><span>Departs</span></div>',
             dateBlocksHtml,
             '  <div class="footer">' + totalCount + ' total requests &middot; ' + activeCount + ' groups monitored &middot; <a href="/faq">FAQ</a> &middot; <a href="/terms">Terms</a> &middot; v3.2</div>',
             '</div>',
@@ -1465,6 +1533,12 @@ app.get('/', optionalAuth, async function(req, res) {
             '    }',
             '    window.addEventListener("scroll", updateStickyDate, { passive: true });',
             '  }',
+            '',
+            '  // ── Tap to expand message on mobile ──────',
+            '  document.addEventListener("click", function(e) {',
+            '    var td = e.target.closest ? e.target.closest(".col-msg") : null;',
+            '    if (td && window.innerWidth <= 700) td.classList.toggle("expanded");',
+            '  });',
             '',
             '  // ── WhatsApp Click Logger ─────────────────',
             '  window.logWaClick = function(route, type, date) {',
