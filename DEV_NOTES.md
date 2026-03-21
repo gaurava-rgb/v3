@@ -6,27 +6,45 @@ Running notes on improvements, staging setup, and known issues identified during
 
 ## Pending Improvements
 
+See `ROADMAP.md` for full sprint plan. Sprint assignments shown below.
+
 ### Security
-- [x] **Remove digest key from query string** — moved to httpOnly cookie with `/digest/login` flow. Cookie expires in 30 days. POST endpoints return 401 JSON on failure.
-- [ ] **Add CSRF protection to `/submit` form** — form submissions rely only on auth check, no token. Add a CSRF token (e.g. `csurf` middleware or a simple double-submit cookie pattern).
-- [x] **Add rate limiting to `/submit`** — `express-rate-limit`, 10 per 15min per IP. Returns 429 with JSON error.
+- [x] **Remove digest key from query string** — ~~Sprint 1~~ DONE. Moved to httpOnly cookie.
+- [ ] **Add CSRF protection to `/submit` form** — *Sprint 4*. Double-submit cookie pattern.
+- [x] **Add rate limiting to `/submit`** — ~~Sprint 1~~ DONE. 10 per 15min per IP.
 
 ### Reliability
-- [ ] **Add retry on LLM failures** — if OpenRouter drops a call, the message is silently lost. Add one retry after ~2s around the `openai.chat.completions.create()` call in `parser.js`.
-- [ ] **Surface DB errors** — all DB functions catch errors and return `null` silently. Caller never knows if a save failed. Consider at minimum logging with enough context (which message, which group) to trace in PM2 logs.
+- [ ] **Add retry on LLM failures** — *Sprint 2*. One retry after ~2s in `parser.js`.
+- [ ] **Surface DB errors** — *Sprint 2*. Structured logging in `db.js`, no return value changes.
+- [ ] **Log duplicate suppressions** — *Sprint 2*. Log when dedup drops a message so we can measure.
 
-### Matching Quality (parked — in progress)
-- [ ] Time matching — time is only used for quality tier label, not the match score. Two people at opposite ends of a day score the same.
-- [ ] `areNearby()` pairs are static in `normalize.js` — adding a new city pair requires a code change.
-- [ ] Score threshold (0.5) is hardcoded in `matcher.js:58` — no operational dial.
-- [x] **Prevent local-errand mismatches** — `isKnownLocation()` gate + `areNearby()` pairs committed in v3.3.0. Bryan split from College Station.
+### Matching Quality
+- [ ] **Time in match score** — *Sprint 3*. Incorporate time proximity into `calculateScore()`.
+- [ ] `areNearby()` pairs are static in `normalize.js` — *Backlog*. Not urgent.
+- [ ] **Score threshold configurable** — *Sprint 3*. Env var, default 0.5.
+- [x] **Prevent local-errand mismatches** — ~~Sprint 1~~ DONE. v3.3.0.
+
+### Testing
+- [ ] **Matcher unit tests** — *Sprint 3*. Pure function tests for scoring, known locations, nearby.
+- [ ] **Parser contract tests** — *Sprint 3*. Mock LLM, test field extraction + error handling.
 
 ### Architecture
-- [ ] **Split `dashboard.js`** — 1710+ lines handling auth, HTML, CSS, client JS, routing, and digest in one file. Not urgent but will become painful as features grow. Suggested split: `routes/`, `views/`, `middleware/`.
-- [ ] **Date filter logic duplicated** — the same Supabase `.or('ride_plan_date.gte...`)` filter appears at `dashboard.js:1172` and `dashboard.js:675`. Extract to a shared function.
+- [ ] **Split `dashboard.js`** — *Sprint 4*. Routes, views, middleware separation.
+- [ ] **Date filter logic duplicated** — *Sprint 4*. Extract to shared function.
+- [ ] **Supabase client separation** — *Sprint 4*. Read-only client for public queries.
+
+### Lifecycle + Dedup
+- [ ] **Don't close requests on match** — *Sprint 5*. Biggest product-logic fix.
+- [ ] **Request expiry** — *Sprint 5*. 48h TTL, auto-expire stale requests.
+- [ ] **Improve dedup hash** — *Sprint 5*. Add time bucket, log suppression reasons.
+
+### Observability
+- [ ] **Parse false negative review** — *Sprint 6*. Admin view of isRequest=false messages.
+- [ ] **Unmatched request aging** — *Sprint 6*. Track open requests by age bucket.
+- [ ] **Match outcome tracking** — *Sprint 6*. Notified → accepted vs expired.
 
 ### Outbound Messaging
-- [ ] `outbound_queue` table exists but is unused — bot can receive but not close the loop with matched users. Planned for a future iteration. Schema is ready.
+- [ ] `outbound_queue` table exists but is unused — *Backlog*. Schema is ready.
 
 ---
 
