@@ -1,6 +1,6 @@
 # Sprint 3 — Testing + Match Quality
 
-**Status:** READY
+**Status:** COMPLETE
 
 ## Goal
 Add first test infrastructure and improve match scoring with time proximity.
@@ -56,12 +56,12 @@ Sprint 2 (complete): LLM retry, structured DB error logging, dedup suppression l
 Target: v3.5.0
 
 ## Verification checklist
-- [ ] `npm test` runs and all tests pass
-- [ ] Matcher tests: strong, medium, low, no match scenarios
-- [ ] Matcher tests: nearby locations, missing fields
-- [ ] Parser tests: field extraction from mocked response
-- [ ] Parser tests: malformed/empty response handling
-- [ ] Time proximity: same-time scores higher than far-apart times
-- [ ] Time proximity: requests without times unaffected
-- [ ] Score threshold: env var overrides default
-- [ ] Smoke test: `node -e "require('./matcher')"` and `node -e "require('./parser')"` load without errors
+- [x] `npm test` runs and all tests pass (51 tests, 0 failures)
+- [x] Matcher tests: strong, medium, low, no match scenarios
+- [x] Matcher tests: nearby locations, missing fields
+- [x] Parser tests: field extraction from mocked response
+- [x] Parser tests: malformed/empty response handling
+- [x] Time proximity: same-time scores higher than far-apart times
+- [x] Time proximity: requests without times unaffected
+- [x] Score threshold: env var overrides default
+- [x] Smoke test: `node -e "require('./matcher')"` and `node -e "require('./parser')"` load without errors

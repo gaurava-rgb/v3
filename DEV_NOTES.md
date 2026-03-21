@@ -19,14 +19,14 @@ See `ROADMAP.md` for full sprint plan. Sprint assignments shown below.
 - [x] **Log duplicate suppressions** — ~~Sprint 2~~ DONE. Logs sender, dest, date, existing ID.
 
 ### Matching Quality
-- [ ] **Time in match score** — *Sprint 3*. Incorporate time proximity into `calculateScore()`.
+- [x] **Time in match score** — ~~Sprint 3~~ DONE. Time proximity in `calculateScore()`: ≤30min full, ≤2h small penalty, >2h larger penalty.
 - [ ] `areNearby()` pairs are static in `normalize.js` — *Backlog*. Not urgent.
-- [ ] **Score threshold configurable** — *Sprint 3*. Env var, default 0.5.
+- [x] **Score threshold configurable** — ~~Sprint 3~~ DONE. `MATCH_THRESHOLD` env var, default 0.5.
 - [x] **Prevent local-errand mismatches** — ~~Sprint 1~~ DONE. v3.3.0.
 
 ### Testing
-- [ ] **Matcher unit tests** — *Sprint 3*. Pure function tests for scoring, known locations, nearby.
-- [ ] **Parser contract tests** — *Sprint 3*. Mock LLM, test field extraction + error handling.
+- [x] **Matcher unit tests** — ~~Sprint 3~~ DONE. 33 tests: scoring, quality tiers, nearby, time proximity, threshold.
+- [x] **Parser contract tests** — ~~Sprint 3~~ DONE. 18 tests: skip patterns, field extraction, error recovery, retry.
 
 ### Architecture
 - [ ] **Split `dashboard.js`** — *Sprint 4*. Routes, views, middleware separation.

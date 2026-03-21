@@ -7,6 +7,10 @@
 const db = require('./db');
 const { normalizeLocation, isKnownLocation, areNearby } = require('./normalize');
 
+function getMatchThreshold() {
+    return parseFloat(process.env.MATCH_THRESHOLD) || 0.5;
+}
+
 /**
  * Computes match quality tier based on date/time certainty of both parties.
  *
@@ -55,7 +59,7 @@ async function processRequest(request) {
 
     for (const match of potentialMatches) {
         const score = calculateScore(request, match);
-        if (score < 0.5) continue;
+        if (score < getMatchThreshold()) continue;
 
         const needId  = request.request_type === 'need'  ? request.id : match.id;
         const offerId = request.request_type === 'offer' ? request.id : match.id;
@@ -111,6 +115,20 @@ function calculateScore(request, match) {
         }
     }
 
+    // Time proximity bonus: if both have ride_plan_time, reward closeness
+    if (request.ride_plan_time && match.ride_plan_time) {
+        const [rH, rM] = request.ride_plan_time.split(':').map(Number);
+        const [mH, mM] = match.ride_plan_time.split(':').map(Number);
+        const diffMinutes = Math.abs((rH * 60 + rM) - (mH * 60 + mM));
+        if (diffMinutes <= 30) {
+            score *= 1.0;       // same window — no penalty
+        } else if (diffMinutes <= 120) {
+            score *= 0.95;      // within 2 hours — small penalty
+        } else {
+            score *= 0.8;       // far apart — larger penalty
+        }
+    }
+
     return score;
 }
 
@@ -130,4 +148,4 @@ function formatMatch(matchData) {
     return msg;
 }
 
-module.exports = { processRequest, formatMatch, computeMatchQuality };
+module.exports = { processRequest, formatMatch, computeMatchQuality, calculateScore, getMatchThreshold };

@@ -24,7 +24,7 @@ Future sprint files are written at the end of the preceding sprint (not pre-crea
 |--------|-------|--------|-----------|
 | 1 | Security quick wins | DONE | Matcher local-errand fix, rate limiting, digest cookie auth |
 | 2 | Reliability | DONE | LLM retry, DB error surfacing, log duplicate suppressions |
-| 3 | Testing + match quality | PLANNED | Matcher unit tests, time in match score, parser contract tests |
+| 3 | Testing + match quality | DONE | Matcher unit tests, time in match score, parser contract tests, configurable threshold |
 | 4 | Architecture | PLANNED | Split dashboard.js, extract shared queries, Supabase client separation |
 | 5 | Lifecycle + dedup | PLANNED | Don't close requests on match, expiry TTL, soft dedup |
 | 6 | Observability | PLANNED | Parse false negative review, unmatched aging, match outcomes |
@@ -39,8 +39,8 @@ Committed pending matcher/normalize fix. Added rate limiting to `/submit`. Moved
 ### Sprint 2 — DONE (v3.4.0, deployed 2026-03-21)
 LLM retry with 2s backoff in parser.js. Structured error logging in all db.js functions. Dedup suppression logging for measurement.
 
-### Sprint 3 — Testing + Match Quality
-Add first test infrastructure (jest or node:test). Matcher unit tests: score calculation, known location gate, nearby pairs, threshold. Parser contract tests: mock LLM response, verify field extraction, test error recovery. Add time proximity to match score (not just quality tier). Configurable score threshold via env var.
+### Sprint 3 — DONE (v3.5.0, 2026-03-21)
+Test infrastructure via node:test (51 tests). Matcher unit tests: computeMatchQuality, calculateScore, nearby locations, time proximity, configurable threshold. Parser contract tests: mocked LLM, field extraction, skip patterns, error recovery. Time proximity scoring in calculateScore(). MATCH_THRESHOLD env var (default 0.5).
 
 ### Sprint 4 — Architecture
 Split dashboard.js (~1800 lines) into routes/, views/, middleware/. Extract duplicated date-filter query to shared function. Introduce read-only Supabase client for public dashboard queries (defense-in-depth). Add CSRF to /submit form.
