@@ -718,14 +718,18 @@ function digestAuth(req, res) {
         res.status(500).send('DIGEST_KEY not configured');
         return false;
     }
-    if (req.query.key !== DIGEST_KEY) {
-        res.status(403).send('Forbidden');
+    if (req.cookies.digest_key !== DIGEST_KEY) {
+        if (req.method === 'GET') {
+            res.redirect('/digest/login');
+        } else {
+            res.status(401).json({ error: 'Not authenticated' });
+        }
         return false;
     }
     return true;
 }
 
-function renderMatchCard(match, digestKey) {
+function renderMatchCard(match) {
     var need = match.need;
     var offer = match.offer;
 
@@ -800,7 +804,7 @@ function renderMatchCard(match, digestKey) {
     return parts.join('\n');
 }
 
-function renderClusterCard(cluster, digestKey) {
+function renderClusterCard(cluster) {
     var dateLabel = cluster.repDate ? formatDate(cluster.repDate) : 'Flexible date';
     var parts = [];
 
@@ -1720,6 +1724,37 @@ app.get('/', optionalAuth, async function(req, res) {
 
 // ── Digest Routes ────────────────────────────────────────────────────────
 
+app.get('/digest/login', function(req, res) {
+    var error = req.query.error ? '<p style="color:#e53e3e;margin-bottom:16px;">Invalid key. Try again.</p>' : '';
+    res.send([
+        '<!DOCTYPE html><html><head><meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        '<title>Digest Login</title>',
+        '<style>body{font-family:-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#fafafa;margin:0}',
+        '.box{background:#fff;padding:32px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);max-width:360px;width:100%}',
+        'h2{margin:0 0 16px;font-size:20px}input{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:16px;margin-bottom:12px;box-sizing:border-box}',
+        'button{width:100%;padding:10px;background:#500000;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer}button:hover{background:#6b0000}</style>',
+        '</head><body><div class="box"><h2>Admin Digest</h2>',
+        error,
+        '<form method="POST" action="/digest/login"><input type="password" name="key" placeholder="Enter digest key" autofocus>',
+        '<button type="submit">Sign In</button></form></div></body></html>'
+    ].join('\n'));
+});
+
+app.post('/digest/login', function(req, res) {
+    var key = (req.body.key || '').trim();
+    if (!DIGEST_KEY || key !== DIGEST_KEY) {
+        return res.redirect('/digest/login?error=1');
+    }
+    res.cookie('digest_key', key, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+    res.redirect('/digest');
+});
+
+app.get('/digest/logout', function(req, res) {
+    res.clearCookie('digest_key');
+    res.redirect('/digest/login');
+});
+
 app.get('/digest', async function(req, res) {
     if (!digestAuth(req, res)) return;
 
@@ -1730,23 +1765,22 @@ app.get('/digest', async function(req, res) {
         var matches = await matchesPromise;
         var clusters = await clustersPromise;
         var unhandledCount = matches.filter(function(m) { return !m.notified; }).length;
-        var KEY = req.query.key;
 
         var cardsHtml;
         if (matches.length === 0) {
             cardsHtml = '<div class="empty-state"><div class="check">&#x2705;</div>All clear! No unnotified matches.</div>';
         } else {
-            cardsHtml = matches.map(function(m) { return renderMatchCard(m, KEY); }).join('\n');
+            cardsHtml = matches.map(function(m) { return renderMatchCard(m); }).join('\n');
         }
 
         var clustersHtml;
         if (clusters.length === 0) {
             clustersHtml = '<div class="empty-state" style="padding:24px;font-size:14px;color:#aaa;">No same-way clusters right now.</div>';
         } else {
-            clustersHtml = clusters.map(function(c) { return renderClusterCard(c, KEY); }).join('\n');
+            clustersHtml = clusters.map(function(c) { return renderClusterCard(c); }).join('\n');
         }
 
-        var toggleHref = '/digest?key=' + encodeURIComponent(KEY) + (showAll ? '' : '&show=all');
+        var toggleHref = showAll ? '/digest' : '/digest?show=all';
         var toggleLabel = showAll ? 'Show Unhandled Only' : 'Show All';
 
         var markAllBtn = unhandledCount > 0
@@ -1822,6 +1856,7 @@ app.get('/digest', async function(req, res) {
             '    <div class="digest-actions">',
             '      ' + markAllBtn,
             '      <a class="btn" href="' + escHtml(toggleHref) + '">' + toggleLabel + '</a>',
+            '      <a class="btn" href="/digest/logout" style="font-size:12px;opacity:0.6;">Logout</a>',
             '    </div>',
             '  </div>',
             '',
@@ -1835,14 +1870,12 @@ app.get('/digest', async function(req, res) {
             '',
             '</div>',
             '<script>',
-            '  var DIGEST_KEY = "' + KEY + '";',
-            '',
             '  async function markHandled(matchId) {',
             '    var btn = event.target;',
             '    btn.disabled = true;',
             '    btn.textContent = "Marking...";',
             '    try {',
-            '      var resp = await fetch("/digest/mark?key=" + DIGEST_KEY, {',
+            '      var resp = await fetch("/digest/mark", {',
             '        method: "POST",',
             '        headers: { "Content-Type": "application/json" },',
             '        body: JSON.stringify({ matchId: matchId })',
@@ -1865,7 +1898,7 @@ app.get('/digest', async function(req, res) {
             '    if (ids.length === 0) return;',
             '    if (!confirm("Mark all " + ids.length + " matches as handled?")) return;',
             '    try {',
-            '      var resp = await fetch("/digest/mark?key=" + DIGEST_KEY, {',
+            '      var resp = await fetch("/digest/mark", {',
             '        method: "POST",',
             '        headers: { "Content-Type": "application/json" },',
             '        body: JSON.stringify({ matchIds: ids })',
