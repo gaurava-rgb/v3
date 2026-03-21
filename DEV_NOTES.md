@@ -14,9 +14,9 @@ See `ROADMAP.md` for full sprint plan. Sprint assignments shown below.
 - [x] **Add rate limiting to `/submit`** — ~~Sprint 1~~ DONE. 10 per 15min per IP.
 
 ### Reliability
-- [ ] **Add retry on LLM failures** — *Sprint 2*. One retry after ~2s in `parser.js`.
-- [ ] **Surface DB errors** — *Sprint 2*. Structured logging in `db.js`, no return value changes.
-- [ ] **Log duplicate suppressions** — *Sprint 2*. Log when dedup drops a message so we can measure.
+- [x] **Add retry on LLM failures** — ~~Sprint 2~~ DONE. One retry after ~2s in `parser.js`.
+- [x] **Surface DB errors** — ~~Sprint 2~~ DONE. Structured logging in `db.js`.
+- [x] **Log duplicate suppressions** — ~~Sprint 2~~ DONE. Logs sender, dest, date, existing ID.
 
 ### Matching Quality
 - [ ] **Time in match score** — *Sprint 3*. Incorporate time proximity into `calculateScore()`.
