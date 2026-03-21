@@ -8,6 +8,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const { saveRequest } = require('./db');
 const { processRequest } = require('./matcher');
@@ -960,7 +961,15 @@ app.post('/log-click', optionalAuth, async function(req, res) {
 
 // ── Submit Ride (Web Form) ───────────────────────────────────────────────
 
-app.post('/submit', optionalAuth, async function(req, res) {
+var submitLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many submissions. Please try again later.' }
+});
+
+app.post('/submit', submitLimiter, optionalAuth, async function(req, res) {
     if (!req.user) {
         return res.status(401).json({ error: 'You must be signed in to submit a ride.' });
     }
