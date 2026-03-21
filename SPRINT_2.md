@@ -1,6 +1,6 @@
 # Sprint 2 — Reliability
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 ## Goal
 Stop losing data silently — retry failed LLM calls and surface DB errors in PM2 logs.
@@ -38,10 +38,10 @@ Sprint 1 (complete): matcher local-errand fix, rate limiting on `/submit`, diges
 Target: v3.4.0
 
 ## Verification checklist
-- [ ] LLM retry: bad key → two attempts logged, then failure
-- [ ] LLM retry: good key → single call, no double-processing
-- [ ] DB errors: forced failure → structured log line with function name + context
-- [ ] DB errors: normal operation → no new log noise
-- [ ] Dedup logging: duplicate message → structured log with sender, dest, date, existing ID
-- [ ] Dedup logging: new message → no extra noise
-- [ ] Smoke test: `node -e "require('./parser')"` and `node -e "require('./db')"` load without errors
+- [x] LLM retry: bad key → two attempts logged, then failure
+- [x] LLM retry: good key → single call, no double-processing
+- [x] DB errors: forced failure → structured log line with function name + context
+- [x] DB errors: normal operation → no new log noise
+- [x] Dedup logging: duplicate message → structured log with sender, dest, date, existing ID
+- [x] Dedup logging: new message → no extra noise
+- [x] Smoke test: `node -e "require('./parser')"` and `node -e "require('./db')"` load without errors

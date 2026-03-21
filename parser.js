@@ -108,15 +108,24 @@ async function parseMessage(message, senderName = '') {
     }
 
     try {
-        const response = await openai.chat.completions.create({
-            model: MODEL,
-            messages: [
-                { role: 'system', content: buildSystemPrompt() },
-                { role: 'user', content: `Message from ${senderName || 'user'}:\n"${message}"` }
-            ],
-            temperature: 0.1,
-            max_tokens: 350
-        });
+        const llmMessages = [
+            { role: 'system', content: buildSystemPrompt() },
+            { role: 'user', content: `Message from ${senderName || 'user'}:\n"${message}"` }
+        ];
+
+        let response;
+        try {
+            response = await openai.chat.completions.create({
+                model: MODEL, messages: llmMessages, temperature: 0.1, max_tokens: 350
+            });
+        } catch (firstErr) {
+            console.warn(`[Parser] LLM call failed (attempt 1/2): ${firstErr.message?.substring(0, 100)}`);
+            await new Promise(r => setTimeout(r, 2000));
+            response = await openai.chat.completions.create({
+                model: MODEL, messages: llmMessages, temperature: 0.1, max_tokens: 350
+            });
+            console.log('[Parser] LLM retry succeeded (attempt 2/2)');
+        }
 
         const content = response.choices[0]?.message?.content?.trim();
         if (!content) return { isRequest: false };

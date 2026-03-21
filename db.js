@@ -45,12 +45,13 @@ async function getGroupUpdates(since) {
 
 async function seedGroups(groups) {
     for (const g of groups) {
-        await supabase
+        const { error } = await supabase
             .from('monitored_groups')
             .upsert(
                 { group_id: g.id, group_name: g.name },
                 { onConflict: 'group_id', ignoreDuplicates: true }
             );
+        if (error) console.error(`[DB] seedGroups failed for group ${g.id}: ${error.message}`);
     }
 }
 
@@ -65,13 +66,14 @@ async function seedGroups(groups) {
 async function upsertContact(lid, phone, name) {
     if (!lid || !phone) return;
 
-    await supabase.from('wa_contacts').upsert(
+    const { error: upsertErr } = await supabase.from('wa_contacts').upsert(
         { lid, phone, name: name || null, updated_at: new Date().toISOString() },
         { onConflict: 'lid' }
     );
+    if (upsertErr) console.error(`[DB] upsertContact failed for lid=${lid} phone=${phone}: ${upsertErr.message}`);
 
     // Backfill existing rows that stored the raw LID
-    await Promise.all([
+    const [reqResult, logResult] = await Promise.all([
         supabase.from('v3_requests')
             .update({ source_contact: phone })
             .eq('source_contact', lid),
@@ -79,6 +81,8 @@ async function upsertContact(lid, phone, name) {
             .update({ source_contact: phone })
             .eq('source_contact', lid)
     ]);
+    if (reqResult.error) console.error(`[DB] upsertContact backfill v3_requests failed for lid=${lid}: ${reqResult.error.message}`);
+    if (logResult.error) console.error(`[DB] upsertContact backfill v3_message_log failed for lid=${lid}: ${logResult.error.message}`);
 }
 
 /**
@@ -87,11 +91,12 @@ async function upsertContact(lid, phone, name) {
  */
 async function resolveContactPhone(lid) {
     if (!lid) return null;
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from('wa_contacts')
         .select('phone')
         .eq('lid', lid)
         .maybeSingle();
+    if (error) console.error(`[DB] resolveContactPhone failed for lid=${lid}: ${error.message}`);
     return data?.phone || null;
 }
 
@@ -124,7 +129,10 @@ async function messageAlreadyProcessed(waMessageId) {
         .eq('wa_message_id', waMessageId)
         .limit(1)
         .maybeSingle();
-    if (error) return false;
+    if (error) {
+        console.error(`[DB] messageAlreadyProcessed failed for waMessageId=${waMessageId}: ${error.message}`);
+        return false;
+    }
     return !!data;
 }
 
@@ -145,13 +153,14 @@ function computeRequestHash({ sourceContact, type, category, destination, date }
 }
 
 async function findExistingRequest(hash) {
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from('v3_requests')
         .select('id, source_group')
         .eq('request_hash', hash)
         .eq('request_status', 'open')
         .limit(1)
         .single();
+    if (error && error.code !== 'PGRST116') console.error(`[DB] findExistingRequest failed for hash=${hash}: ${error.message}`);
     return data;
 }
 
@@ -170,7 +179,7 @@ async function saveRequest(data) {
 
     const existing = await findExistingRequest(hash);
     if (existing) {
-        console.log(`[DB] Duplicate request (matches ${existing.id} from ${existing.source_group}), skipping`);
+        console.log(`[DB] Duplicate suppressed: ${data.sourceContact} → ${data.destination || 'N/A'} on ${data.date || 'N/A'} (existing request ${existing.id})`);
         return null;
     }
 
@@ -252,12 +261,13 @@ async function findMatches(request) {
 }
 
 async function saveMatch(needId, offerId, score = 1.0, match_quality = 'medium') {
-    const { data: existing } = await supabase
+    const { data: existing, error: existErr } = await supabase
         .from('v3_matches')
         .select('id')
         .or(`and(need_id.eq.${needId},offer_id.eq.${offerId}),and(need_id.eq.${offerId},offer_id.eq.${needId})`)
         .single();
 
+    if (existErr && existErr.code !== 'PGRST116') console.error(`[DB] saveMatch duplicate-check failed for need=${needId} offer=${offerId}: ${existErr.message}`);
     if (existing) return null;
 
     const { data: match, error } = await supabase
