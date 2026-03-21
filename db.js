@@ -12,6 +12,29 @@ const supabase = createClient(
     process.env.SUPABASE_KEY
 );
 
+/**
+ * Sanitize error messages before logging.
+ * Cloudflare HTML error pages can be 100+ lines — extract the useful bits.
+ */
+function sanitizeError(msg) {
+    if (!msg || typeof msg !== 'string') return msg || 'unknown error';
+    if (!msg.includes('<') || !msg.includes('</')) return msg;
+
+    // Extract Cloudflare error code (e.g. 522, 524)
+    const codeMatch = msg.match(/errorcode_(\d{3})/);
+    const code = codeMatch ? codeMatch[1] : 'unknown';
+
+    // Extract Ray ID
+    const rayMatch = msg.match(/Ray ID:\s*<[^>]*>([a-f0-9]+)/);
+    const ray = rayMatch ? rayMatch[1] : 'n/a';
+
+    // Extract host
+    const hostMatch = msg.match(/([a-z0-9]+\.supabase\.co)/);
+    const host = hostMatch ? hostMatch[1] : 'supabase';
+
+    return `Cloudflare ${code} — host: ${host}, ray: ${ray} (HTML error page truncated)`;
+}
+
 // ============================================================
 // Monitored Groups (shared table with v2)
 // ============================================================
@@ -23,7 +46,7 @@ async function loadMonitoredGroups() {
         .eq('active', true);
 
     if (error) {
-        console.error('[DB] Error loading monitored groups:', error.message);
+        console.error('[DB] Error loading monitored groups:', sanitizeError(error.message));
         return [];
     }
     return data || [];
@@ -37,7 +60,7 @@ async function getGroupUpdates(since) {
         .limit(1);
 
     if (error) {
-        console.error('[DB] Error checking group updates:', error.message);
+        console.error('[DB] Error checking group updates:', sanitizeError(error.message));
         return false;
     }
     return data && data.length > 0;
@@ -51,7 +74,7 @@ async function seedGroups(groups) {
                 { group_id: g.id, group_name: g.name },
                 { onConflict: 'group_id', ignoreDuplicates: true }
             );
-        if (error) console.error(`[DB] seedGroups failed for group ${g.id}: ${error.message}`);
+        if (error) console.error(`[DB] seedGroups failed for group ${g.id}: ${sanitizeError(error.message)}`);
     }
 }
 
@@ -70,7 +93,7 @@ async function upsertContact(lid, phone, name) {
         { lid, phone, name: name || null, updated_at: new Date().toISOString() },
         { onConflict: 'lid' }
     );
-    if (upsertErr) console.error(`[DB] upsertContact failed for lid=${lid} phone=${phone}: ${upsertErr.message}`);
+    if (upsertErr) console.error(`[DB] upsertContact failed for lid=${lid} phone=${phone}: ${sanitizeError(upsertErr.message)}`);
 
     // Backfill existing rows that stored the raw LID
     const [reqResult, logResult] = await Promise.all([
@@ -81,8 +104,8 @@ async function upsertContact(lid, phone, name) {
             .update({ source_contact: phone })
             .eq('source_contact', lid)
     ]);
-    if (reqResult.error) console.error(`[DB] upsertContact backfill v3_requests failed for lid=${lid}: ${reqResult.error.message}`);
-    if (logResult.error) console.error(`[DB] upsertContact backfill v3_message_log failed for lid=${lid}: ${logResult.error.message}`);
+    if (reqResult.error) console.error(`[DB] upsertContact backfill v3_requests failed for lid=${lid}: ${sanitizeError(reqResult.error.message)}`);
+    if (logResult.error) console.error(`[DB] upsertContact backfill v3_message_log failed for lid=${lid}: ${sanitizeError(logResult.error.message)}`);
 }
 
 /**
@@ -96,7 +119,7 @@ async function resolveContactPhone(lid) {
         .select('phone')
         .eq('lid', lid)
         .maybeSingle();
-    if (error) console.error(`[DB] resolveContactPhone failed for lid=${lid}: ${error.message}`);
+    if (error) console.error(`[DB] resolveContactPhone failed for lid=${lid}: ${sanitizeError(error.message)}`);
     return data?.phone || null;
 }
 
@@ -117,7 +140,7 @@ async function logMessage({ waMessageId, sourceGroup, sourceContact, senderName,
             error: error || null
         });
     } catch (err) {
-        console.error('[DB] Failed to log message:', err.message);
+        console.error('[DB] Failed to log message:', sanitizeError(err.message));
     }
 }
 
@@ -130,7 +153,7 @@ async function messageAlreadyProcessed(waMessageId) {
         .limit(1)
         .maybeSingle();
     if (error) {
-        console.error(`[DB] messageAlreadyProcessed failed for waMessageId=${waMessageId}: ${error.message}`);
+        console.error(`[DB] messageAlreadyProcessed failed for waMessageId=${waMessageId}: ${sanitizeError(error.message)}`);
         return false;
     }
     return !!data;
@@ -160,7 +183,7 @@ async function findExistingRequest(hash) {
         .eq('request_status', 'open')
         .limit(1)
         .single();
-    if (error && error.code !== 'PGRST116') console.error(`[DB] findExistingRequest failed for hash=${hash}: ${error.message}`);
+    if (error && error.code !== 'PGRST116') console.error(`[DB] findExistingRequest failed for hash=${hash}: ${sanitizeError(error.message)}`);
     return data;
 }
 
@@ -211,7 +234,7 @@ async function saveRequest(data) {
         .single();
 
     if (error) {
-        console.error('[DB] Error saving request:', error.message);
+        console.error('[DB] Error saving request:', sanitizeError(error.message));
         return null;
     }
 
@@ -253,7 +276,7 @@ async function findMatches(request) {
     const { data: matches, error } = await query;
 
     if (error) {
-        console.error('[DB] Error finding matches:', error.message);
+        console.error('[DB] Error finding matches:', sanitizeError(error.message));
         return [];
     }
 
@@ -267,7 +290,7 @@ async function saveMatch(needId, offerId, score = 1.0, match_quality = 'medium')
         .or(`and(need_id.eq.${needId},offer_id.eq.${offerId}),and(need_id.eq.${offerId},offer_id.eq.${needId})`)
         .single();
 
-    if (existErr && existErr.code !== 'PGRST116') console.error(`[DB] saveMatch duplicate-check failed for need=${needId} offer=${offerId}: ${existErr.message}`);
+    if (existErr && existErr.code !== 'PGRST116') console.error(`[DB] saveMatch duplicate-check failed for need=${needId} offer=${offerId}: ${sanitizeError(existErr.message)}`);
     if (existing) return null;
 
     const { data: match, error } = await supabase
@@ -283,7 +306,7 @@ async function saveMatch(needId, offerId, score = 1.0, match_quality = 'medium')
         .single();
 
     if (error) {
-        console.error('[DB] Error saving match:', error.message);
+        console.error('[DB] Error saving match:', sanitizeError(error.message));
         return null;
     }
 
