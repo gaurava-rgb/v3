@@ -20,7 +20,8 @@ const LOCATION_MAP = {
     'Austin': ['austin'],
     'Austin Airport': ['austin airport', 'austin-bergstrom', 'abia', 'aus airport'],
     'San Antonio': ['san antonio', 'sa'],
-    'College Station': ['cs', 'cstat', 'c station', 'college station', 'bryan']
+    'College Station': ['cs', 'cstat', 'c station', 'college station'],
+    'Bryan': ['bryan', 'bcs']
 };
 
 function normalizeLocation(location) {
@@ -47,4 +48,24 @@ function normalizeLocation(location) {
     return bestMatch || location.trim();
 }
 
-module.exports = { normalizeLocation, LOCATION_MAP };
+const KNOWN_LOCATIONS = new Set(Object.keys(LOCATION_MAP));
+
+// Pairs of locations close enough to still be a useful match (with a small penalty)
+const NEARBY_PAIRS = [
+    new Set(['College Station', 'Bryan']),
+    new Set(['Houston IAH', 'Houston Hobby']),
+    new Set(['Houston IAH', 'Houston']),
+    new Set(['Houston Hobby', 'Houston']),
+    new Set(['Dallas DFW', 'Dallas']),
+    new Set(['Austin Airport', 'Austin']),
+];
+
+function areNearby(a, b) {
+    return NEARBY_PAIRS.some(pair => pair.has(a) && pair.has(b));
+}
+
+function isKnownLocation(location) {
+    return KNOWN_LOCATIONS.has(normalizeLocation(location));
+}
+
+module.exports = { normalizeLocation, LOCATION_MAP, isKnownLocation, areNearby };

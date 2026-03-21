@@ -5,7 +5,7 @@
  */
 
 const db = require('./db');
-const { normalizeLocation } = require('./normalize');
+const { normalizeLocation, isKnownLocation, areNearby } = require('./normalize');
 
 /**
  * Computes match quality tier based on date/time certainty of both parties.
@@ -91,8 +91,17 @@ function calculateScore(request, match) {
     }
 
     if (request.request_category === 'ride' && request.request_destination && match.request_destination) {
-        if (normalizeLocation(request.request_destination) === normalizeLocation(match.request_destination)) {
+        // Local errand (address, venue, or unknown location) — never match against intercity rides
+        if (!isKnownLocation(request.request_destination) || !isKnownLocation(match.request_destination)) {
+            return 0;
+        }
+
+        const reqDest  = normalizeLocation(request.request_destination);
+        const matchDest = normalizeLocation(match.request_destination);
+        if (reqDest === matchDest) {
             score *= 1.0;
+        } else if (areNearby(reqDest, matchDest)) {
+            score *= 0.9;
         } else {
             score *= 0.6;
         }
