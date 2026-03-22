@@ -25,7 +25,7 @@ Future sprint files are written at the end of the preceding sprint (not pre-crea
 | 1 | Security quick wins | DONE | Matcher local-errand fix, rate limiting, digest cookie auth |
 | 2 | Reliability | DONE | LLM retry, DB error surfacing, log duplicate suppressions |
 | 3 | Testing + match quality | DONE | Matcher unit tests, time in match score, parser contract tests, configurable threshold |
-| 4 | Architecture | PLANNED | Split dashboard.js, extract shared queries, Supabase client separation |
+| 4 | Architecture | DONE | Split dashboard.js (36 lines), shared date filter, read-only Supabase client |
 | 5 | Lifecycle + dedup | PLANNED | Don't close requests on match, expiry TTL, soft dedup |
 | 6 | Observability | PLANNED | Parse false negative review, unmatched aging, match outcomes |
 
@@ -42,8 +42,8 @@ LLM retry with 2s backoff in parser.js. Structured error logging in all db.js fu
 ### Sprint 3 — DONE (v3.5.0, 2026-03-21)
 Test infrastructure via node:test (51 tests). Matcher unit tests: computeMatchQuality, calculateScore, nearby locations, time proximity, configurable threshold. Parser contract tests: mocked LLM, field extraction, skip patterns, error recovery. Time proximity scoring in calculateScore(). MATCH_THRESHOLD env var (default 0.5).
 
-### Sprint 4 — Architecture
-Split dashboard.js (~1800 lines) into routes/, views/, middleware/. Extract duplicated date-filter query to shared function. Introduce read-only Supabase client for public dashboard queries (defense-in-depth). Add CSRF to /submit form.
+### Sprint 4 — DONE (v3.6.0, 2026-03-22)
+Split dashboard.js from 1957 lines to 36 lines. Route handlers in `routes/` (5 files), middleware in `middleware/` (2 files), shared logic in `lib/` (5 files). Extracted duplicated date-filter to `lib/dateFilter.js`. Read-only Supabase client for public queries (`lib/supabase.js`). CSRF deferred (low-traffic form).
 
 ### Sprint 5 — Lifecycle + Dedup
 Stop closing requests on match creation (biggest product win). Add request expiry (48h TTL). Add `closed` state for admin action. Simple match states: candidate → notified → accepted/expired. Improve dedup: add time bucket to hash, log suppression reasons.

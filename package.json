@@ -1,6 +1,6 @@
 {
   "name": "aggieconnect-baileys-v3",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Aggie Connect — Baileys v3 (fuzzy dates, match quality, trip cluster dashboard)",
   "main": "bot.js",
   "scripts": {

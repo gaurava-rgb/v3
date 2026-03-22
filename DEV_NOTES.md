@@ -29,9 +29,9 @@ See `ROADMAP.md` for full sprint plan. Sprint assignments shown below.
 - [x] **Parser contract tests** — ~~Sprint 3~~ DONE. 18 tests: skip patterns, field extraction, error recovery, retry.
 
 ### Architecture
-- [ ] **Split `dashboard.js`** — *Sprint 4*. Routes, views, middleware separation.
-- [ ] **Date filter logic duplicated** — *Sprint 4*. Extract to shared function.
-- [ ] **Supabase client separation** — *Sprint 4*. Read-only client for public queries.
+- [x] **Split `dashboard.js`** — ~~Sprint 4~~ DONE. Routes in `routes/`, middleware in `middleware/`, shared code in `lib/`. dashboard.js is 36 lines.
+- [x] **Date filter logic duplicated** — ~~Sprint 4~~ DONE. `lib/dateFilter.js`: `filterActiveRequests()` + `buildTestGroupSet()`.
+- [x] **Supabase client separation** — ~~Sprint 4~~ DONE. `lib/supabase.js`: `readClient` (public queries), `writeClient` (bot/admin), `authClient` (auth ops).
 
 ### Lifecycle + Dedup
 - [ ] **Don't close requests on match** — *Sprint 5*. Biggest product-logic fix.
