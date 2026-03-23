@@ -13,14 +13,15 @@ const LOCATION_MAP = {
     'Houston Hobby': ['hobby', 'hou airport'],
     'Houston': ['houston'],
     'Dallas DFW': [
-        'dfw', 'dallas airport', 'dallas/fort worth', 'dallas fort worth',
-        'dallas-fort worth'
+        'dfw', 'dfw airport', 'dallas airport', 'dallas/fort worth',
+        'dallas fort worth', 'dallas-fort worth'
     ],
-    'Dallas': ['dallas', 'plano', 'richardson', 'frisco', 'irving'],
+    'Dallas': ['dallas', 'plano', 'richardson', 'frisco', 'irving',
+        'lewisville', 'mckinney', 'garland', 'arlington', 'fort worth'],
     'Austin': ['austin'],
     'Austin Airport': ['austin airport', 'austin-bergstrom', 'abia', 'aus airport'],
     'San Antonio': ['san antonio', 'sa'],
-    'College Station': ['cs', 'cstat', 'c station', 'college station'],
+    'College Station': ['cs', 'cstat', 'c-stat', 'c station', 'college station'],
     'Bryan': ['bryan', 'bcs']
 };
 
@@ -68,4 +69,29 @@ function isKnownLocation(location) {
     return KNOWN_LOCATIONS.has(normalizeLocation(location));
 }
 
-module.exports = { normalizeLocation, LOCATION_MAP, isKnownLocation, areNearby };
+// Corridor grouping: nearby normalized locations → corridor label for clustering
+var CORRIDOR_MAP = {
+    'Dallas area': ['Dallas', 'Dallas DFW'],
+    'Houston area': ['Houston', 'Houston IAH', 'Houston Hobby'],
+    'Austin area': ['Austin', 'Austin Airport'],
+    'College Station': ['College Station', 'Bryan'],
+    'San Antonio': ['San Antonio']
+};
+
+// Build reverse lookup: normalized name → corridor
+var _corridorLookup = {};
+var _corridorKeys = Object.keys(CORRIDOR_MAP);
+for (var _ci = 0; _ci < _corridorKeys.length; _ci++) {
+    var _cName = _corridorKeys[_ci];
+    var _cLocs = CORRIDOR_MAP[_cName];
+    for (var _li = 0; _li < _cLocs.length; _li++) {
+        _corridorLookup[_cLocs[_li]] = _cName;
+    }
+}
+
+function getClusterCorridor(normalizedLocation) {
+    if (!normalizedLocation) return 'Other';
+    return _corridorLookup[normalizedLocation] || normalizedLocation;
+}
+
+module.exports = { normalizeLocation, LOCATION_MAP, isKnownLocation, areNearby, CORRIDOR_MAP, getClusterCorridor };
