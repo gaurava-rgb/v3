@@ -11,7 +11,7 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - `normalize.js` — Location name normalization + corridor grouping (`getClusterCorridor`)
 - `dashboard.js` — Express app wiring (routes in `routes/`, middleware in `middleware/`, shared code in `lib/`)
 - `lib/clusters.js` — Cluster grouping query (by date + origin corridor + dest corridor)
-- `routes/clusters.js` — Public cluster board at `/clusters` (Level 0: headers + counts only)
+- `routes/clusters.js` — Cluster board at `/clusters` (Level 0: public headers; Level 1: logged-in detail view)
 - `monitor.js` — PM2 health dashboard
 
 ## Key Facts

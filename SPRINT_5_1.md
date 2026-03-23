@@ -1,6 +1,6 @@
 # Sprint 5.1 — Cluster Board + Auth Ladder
 
-**Status:** IN PROGRESS — Level 0 deployed (headers + counts only, no auth)
+**Status:** IN PROGRESS — Level 0 + Level 1 deployed
 
 ## Goal
 Replace the flat request table with a cluster-based board that groups rides by day + origin + destination. Layer access controls so each step gives the user something before asking for the next thing. Capture silent demand from people who never posted in WhatsApp.
@@ -121,8 +121,7 @@ Each step gives before it asks. Email gives cluster details. Clicking in gives c
 
 ## NOT in this sprint (parked for later)
 
-- @tamu.edu OAuth login (Sprint 5.2)
-- Phone verification / OTP (Sprint 5.3)
+- Phone verification / OTP (Sprint 5.2)
 - Post claiming and editing (Sprint 5.3)
 - Cluster tracking / notifications (Sprint 5.3)
 - "We'll send you updates" outbound messaging (Sprint 5.4)
@@ -140,3 +139,7 @@ Target: v3.8.0
 - [ ] Click-through logging captures which clusters get viewed (Task 4 — next)
 - [x] Existing dashboard, bot, and parser are unaffected
 - [x] `npm test` passes
+- [x] Level 1: logged-in users can expand clusters to see names, messages, timing
+- [x] Level 1: phone numbers hidden behind "verify phone" CTA
+- [x] Auth banner updates based on login state
+- [x] Login flow redirects back to /clusters after verification
