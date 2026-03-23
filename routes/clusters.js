@@ -1,13 +1,16 @@
 /**
- * GET /clusters — Public cluster board (Level 0: headers + counts only)
+ * GET /clusters — Cluster board with auth ladder
+ * Level 0 (no login): headers + counts only
+ * Level 1 (@tamu.edu login): expand clusters to see names, messages, timing
  */
 
 var express = require('express');
 var router = express.Router();
 var { fetchClusters } = require('../lib/clusters');
+var { optionalAuth } = require('../middleware/auth');
 var h = require('../lib/helpers');
 
-router.get('/clusters', async function(req, res) {
+router.get('/clusters', optionalAuth, async function(req, res) {
     try {
         var clusters = await fetchClusters();
 
@@ -30,7 +33,7 @@ router.get('/clusters', async function(req, res) {
             totalPosts += clusters[si].needCount + clusters[si].offerCount;
         }
 
-        var html = renderLevel0(dayOrder, dayMap, totalClusters, totalPosts);
+        var html = renderBoard(dayOrder, dayMap, totalClusters, totalPosts, req.user);
         res.send(html);
     } catch (err) {
         console.error('[Clusters] Error:', err.message);
@@ -38,7 +41,59 @@ router.get('/clusters', async function(req, res) {
     }
 });
 
-function renderLevel0(dayOrder, dayMap, totalClusters, totalPosts) {
+// ── Render helpers ──────────────────────────────────────────────────────
+
+function firstName(name) {
+    if (!name) return '';
+    return String(name).trim().split(/\s+/)[0];
+}
+
+function renderPost(post) {
+    var isOffer = post.request_type === 'offer';
+    var typeClass = isOffer ? 'post-offer' : 'post-need';
+    var typeLabel = isOffer ? 'Offering a ride' : 'Looking for a ride';
+    var typeIcon = isOffer ? 'O' : 'N';
+    var iconClass = isOffer ? 'icon-offer' : 'icon-need';
+
+    var name = firstName(post.sender_name) || 'Someone';
+    var time = post.ride_plan_time ? h.formatTime(post.ride_plan_time) : '';
+    var timeFuzzy = post.time_fuzzy ? '~' : '';
+    var origin = post.request_origin || '?';
+    var dest = post.request_destination || '?';
+    var msg = post.raw_message || '';
+    var posted = h.formatMsgTime(post.created_at);
+
+    var parts = [];
+    parts.push('        <div class="post ' + typeClass + '">');
+    parts.push('          <div class="post-top">');
+    parts.push('            <span class="icon ' + iconClass + '">' + typeIcon + '</span>');
+    parts.push('            <strong class="post-name">' + h.escHtml(name) + '</strong>');
+    parts.push('            <span class="post-type">' + typeLabel + '</span>');
+    if (time) {
+        parts.push('            <span class="post-time">' + timeFuzzy + h.escHtml(time) + '</span>');
+    }
+    parts.push('          </div>');
+
+    // Specific origin/dest (may differ from corridor header)
+    parts.push('          <div class="post-route">' + h.escHtml(origin) + ' &rarr; ' + h.escHtml(dest) + '</div>');
+
+    if (msg) {
+        parts.push('          <div class="post-msg">&ldquo;' + h.escHtml(msg) + '&rdquo;</div>');
+    }
+
+    parts.push('          <div class="post-meta">');
+    parts.push('            <span class="post-contact">Verify phone to see contact</span>');
+    parts.push('            <span class="post-posted">Posted ' + h.escHtml(posted) + '</span>');
+    parts.push('          </div>');
+    parts.push('        </div>');
+
+    return parts.join('\n');
+}
+
+// ── Main render ─────────────────────────────────────────────────────────
+
+function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
+    var loggedIn = !!user;
     var parts = [];
 
     parts.push('<!DOCTYPE html>');
@@ -70,11 +125,18 @@ function renderLevel0(dayOrder, dayMap, totalClusters, totalPosts) {
     parts.push('  </div>');
     parts.push('</header>');
 
-    // Auth banner
-    parts.push('<div class="auth">');
-    parts.push('  <span>Sign in with your @tamu.edu email to see who\'s in each cluster and their contact details.</span>');
-    parts.push('  <a href="/login">Sign in with @tamu.edu &rarr;</a>');
-    parts.push('</div>');
+    // Auth banner — changes based on login state
+    if (loggedIn) {
+        parts.push('<div class="auth auth-loggedin">');
+        parts.push('  <span>Signed in as <strong>' + h.escHtml(user.email) + '</strong> — click any cluster to see details.</span>');
+        parts.push('  <a href="/logout">Sign out</a>');
+        parts.push('</div>');
+    } else {
+        parts.push('<div class="auth">');
+        parts.push('  <span>Sign in with your @tamu.edu email to see who\'s in each cluster and their contact details.</span>');
+        parts.push('  <a href="/login?redirect=/clusters">Sign in with @tamu.edu &rarr;</a>');
+        parts.push('</div>');
+    }
 
     // Topbar
     parts.push('<div class="topbar">');
@@ -124,9 +186,10 @@ function renderLevel0(dayOrder, dayMap, totalClusters, totalPosts) {
             var hasNeeds = cluster.needCount > 0;
             var hasOffers = cluster.offerCount > 0;
             var waitingClass = (!hasNeeds || !hasOffers) ? ' waiting' : '';
+            var clickableClass = loggedIn ? ' clickable' : '';
 
-            parts.push('  <article class="cluster' + waitingClass + '">');
-            parts.push('    <div class="cluster-head">');
+            parts.push('  <article class="cluster' + waitingClass + clickableClass + '">');
+            parts.push('    <div class="cluster-head" onclick="toggleCluster(this)">');
             parts.push('      <h2>' + h.escHtml(cluster.originCorridor) + ' &rarr; ' + h.escHtml(cluster.destCorridor) + '</h2>');
             parts.push('      <div class="cluster-meta">');
             if (hasOffers) {
@@ -141,14 +204,64 @@ function renderLevel0(dayOrder, dayMap, totalClusters, totalPosts) {
             if (!hasNeeds && hasOffers) {
                 parts.push('        <div class="pill pill-signal">No demand yet</div>');
             }
+            if (loggedIn) {
+                parts.push('        <span class="expand-arrow">&#9662;</span>');
+            }
             parts.push('      </div>');
             parts.push('    </div>');
 
-            // Level 0: summary footer only, no post details
-            parts.push('    <div class="cluster-foot">');
-            parts.push('      <p>' + total + ' ' + (total === 1 ? 'person' : 'people') + ' on this route</p>');
-            parts.push('      <a class="btn" href="/login">Sign in to see details</a>');
-            parts.push('    </div>');
+            if (loggedIn) {
+                // Level 1: expandable detail body with posts
+                parts.push('    <div class="cluster-body">');
+
+                // Render offers first, then needs
+                var offers = [];
+                var needs = [];
+                for (var pi = 0; pi < cluster.posts.length; pi++) {
+                    if (cluster.posts[pi].request_type === 'offer') {
+                        offers.push(cluster.posts[pi]);
+                    } else {
+                        needs.push(cluster.posts[pi]);
+                    }
+                }
+
+                if (offers.length > 0) {
+                    parts.push('      <div class="post-section">');
+                    parts.push('        <div class="post-section-label post-section-offer">Rides offered</div>');
+                    for (var oi = 0; oi < offers.length; oi++) {
+                        parts.push(renderPost(offers[oi]));
+                    }
+                    parts.push('      </div>');
+                }
+
+                if (needs.length > 0) {
+                    parts.push('      <div class="post-section">');
+                    parts.push('        <div class="post-section-label post-section-need">Looking for rides</div>');
+                    for (var ni = 0; ni < needs.length; ni++) {
+                        parts.push(renderPost(needs[ni]));
+                    }
+                    parts.push('      </div>');
+                }
+
+                // Phone verify CTA
+                parts.push('      <div class="verify-cta">');
+                parts.push('        <span>Verify your phone to see contact details and connect with riders.</span>');
+                parts.push('      </div>');
+
+                parts.push('    </div>');
+
+                // Footer for logged-in
+                parts.push('    <div class="cluster-foot">');
+                parts.push('      <p>' + total + ' ' + (total === 1 ? 'person' : 'people') + ' on this route</p>');
+                parts.push('      <span class="foot-hint">Click header to ' + (total > 1 ? 'collapse' : 'expand') + '</span>');
+                parts.push('    </div>');
+            } else {
+                // Level 0: summary footer only
+                parts.push('    <div class="cluster-foot">');
+                parts.push('      <p>' + total + ' ' + (total === 1 ? 'person' : 'people') + ' on this route</p>');
+                parts.push('      <a class="btn" href="/login?redirect=/clusters">Sign in to see details</a>');
+                parts.push('    </div>');
+            }
 
             parts.push('  </article>');
         }
@@ -159,13 +272,29 @@ function renderLevel0(dayOrder, dayMap, totalClusters, totalPosts) {
     parts.push('</main>');
     parts.push('</div>');
 
-    // Clock script
+    // Scripts
     parts.push('<script>');
+    // Clock
     parts.push('function updateClock(){');
     parts.push('  var t=new Date().toLocaleTimeString("en-US",{timeZone:"America/Chicago",hour:"numeric",minute:"2-digit",hour12:true});');
     parts.push('  document.getElementById("clock").textContent=t+" CT";');
     parts.push('}');
     parts.push('updateClock();setInterval(updateClock,30000);');
+
+    if (loggedIn) {
+        // Expand/collapse for logged-in users
+        parts.push('function toggleCluster(head){');
+        parts.push('  var article=head.closest(".cluster");');
+        parts.push('  if(!article)return;');
+        parts.push('  article.classList.toggle("open");');
+        parts.push('}');
+    } else {
+        // Non-logged-in click redirects to login
+        parts.push('function toggleCluster(){');
+        parts.push('  window.location.href="/login?redirect=/clusters";');
+        parts.push('}');
+    }
+
     parts.push('</script>');
 
     parts.push('</body>');
@@ -173,6 +302,8 @@ function renderLevel0(dayOrder, dayMap, totalClusters, totalPosts) {
 
     return parts.join('\n');
 }
+
+// ── CSS ─────────────────────────────────────────────────────────────────
 
 var CSS = [
     ':root {',
@@ -209,8 +340,13 @@ var CSS = [
     '.stat { text-align: right; }',
     '.stat strong { display: block; font-size: 22px; line-height: 1; }',
     '.stat span { display: block; margin-top: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; }',
+
+    // Auth banner
     '.auth { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 11px 14px; border: 1px solid #e8d98a; border-radius: 10px; background: #fffbf0; font-size: 13px; color: #6b5800; }',
     '.auth a { color: var(--maroon); text-decoration: none; font-weight: 700; white-space: nowrap; }',
+    '.auth-loggedin { border-color: #c4e2cc; background: var(--need-bg); color: var(--need-text); }',
+
+    // Topbar
     '.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 46px; padding: 0 14px; margin: 0 -4px 16px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: rgba(247,247,245,0.95); backdrop-filter: blur(6px); }',
     '.topbar-left, .topbar-right { display: flex; align-items: center; gap: 14px; min-width: 0; }',
     '.legend { display: inline-flex; align-items: center; gap: 6px; color: var(--text-soft); font-size: 12.5px; font-weight: 600; white-space: nowrap; }',
@@ -218,25 +354,69 @@ var CSS = [
     '.icon-need { background: var(--need-bg); color: var(--need-text); }',
     '.icon-offer { background: var(--offer-bg); color: var(--offer-text); }',
     '.clock { font-size: 12px; color: var(--text-muted); white-space: nowrap; }',
+
+    // Content grid
     '.content { display: grid; gap: 24px; }',
     '.day { display: grid; gap: 10px; }',
     '.day-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1.5px solid var(--border); }',
     '.day-head strong { font-size: 15px; letter-spacing: -0.02em; }',
     '.today { padding: 2px 8px; border-radius: 999px; background: var(--need-bg); color: var(--need-text); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }',
     '.day-head span { margin-left: auto; font-size: 12px; color: var(--text-muted); }',
+
+    // Cluster card
     '.cluster { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }',
     '.cluster-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; background: var(--surface-soft); border-bottom: 1px solid var(--border); }',
+    '.clickable .cluster-head { cursor: pointer; user-select: none; }',
+    '.clickable .cluster-head:hover { background: #f5f5f2; }',
     '.cluster-head h2 { margin: 0; font-size: 17px; letter-spacing: -0.03em; }',
-    '.cluster-meta { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }',
+    '.cluster-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: end; }',
+    '.expand-arrow { font-size: 14px; color: var(--text-muted); transition: transform 0.2s; }',
+    '.cluster.open .expand-arrow { transform: rotate(180deg); }',
+
+    // Pills
     '.pill { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; color: var(--text-soft); white-space: nowrap; font-weight: 600; }',
     '.pill-need { background: var(--need-bg); border-color: #c4e2cc; color: var(--need-text); }',
     '.pill-offer { background: var(--offer-bg); border-color: #c4d6ed; color: var(--offer-text); }',
     '.pill-signal { background: var(--signal-bg); border-color: #f1dfab; color: var(--signal-text); }',
+
+    // Cluster body (Level 1 detail — hidden by default, shown when .open)
+    '.cluster-body { display: none; padding: 0; }',
+    '.cluster.open .cluster-body { display: block; }',
+
+    // Post sections
+    '.post-section { padding: 6px 16px 10px; }',
+    '.post-section + .post-section { border-top: 1px solid var(--border); }',
+    '.post-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 0 4px; }',
+    '.post-section-offer { color: var(--offer-text); }',
+    '.post-section-need { color: var(--need-text); }',
+
+    // Individual post
+    '.post { padding: 10px 0; border-top: 1px solid #f0f0ec; }',
+    '.post:first-of-type { border-top: none; }',
+    '.post-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }',
+    '.post-name { font-size: 14px; letter-spacing: -0.01em; }',
+    '.post-type { font-size: 12px; color: var(--text-muted); }',
+    '.post-time { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text-soft); background: var(--surface-soft); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); }',
+    '.post-route { font-size: 12.5px; color: var(--text-soft); margin-top: 4px; }',
+    '.post-msg { font-size: 13px; color: var(--text-soft); margin-top: 6px; font-style: italic; line-height: 1.5; }',
+    '.post-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }',
+    '.post-contact { font-size: 12px; color: var(--signal-text); background: var(--signal-bg); padding: 3px 10px; border-radius: 6px; border: 1px solid #f1dfab; font-weight: 600; }',
+    '.post-posted { font-size: 11px; color: var(--text-muted); }',
+
+    // Verify CTA inside cluster body
+    '.verify-cta { padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--signal-bg); font-size: 12.5px; color: var(--signal-text); }',
+
+    // Cluster footer
     '.cluster-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; background: var(--maroon-soft); }',
     '.cluster-foot p { margin: 0; font-size: 12.5px; color: var(--text-soft); }',
+    '.foot-hint { font-size: 11px; color: var(--text-muted); }',
+
+    // Button
     '.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: none; border-radius: 8px; background: var(--maroon); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; }',
     '.btn:hover { background: #6b0000; }',
     '.waiting .cluster-head { background: #fcfcfa; }',
+
+    // Responsive
     '@media (max-width: 860px) {',
     '  .hero { flex-direction: column; align-items: start; }',
     '  .stats { width: 100%; justify-content: flex-start; }',
@@ -250,6 +430,10 @@ var CSS = [
     '  .topbar-left, .topbar-right { flex-wrap: wrap; gap: 8px 12px; }',
     '  .cluster-head, .cluster-foot { padding-left: 12px; padding-right: 12px; }',
     '  .hero h1 { font-size: 24px; }',
+    '  .post-section { padding-left: 12px; padding-right: 12px; }',
+    '  .verify-cta { padding-left: 12px; padding-right: 12px; }',
+    '  .post-top { gap: 6px; }',
+    '  .post-time { margin-left: 0; }',
     '}'
 ].join('\n');
 

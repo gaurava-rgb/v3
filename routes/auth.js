@@ -10,7 +10,8 @@ var { renderLoginPage, renderVerifyPage } = require('../lib/views');
 
 router.get('/login', function(req, res) {
     var prefill = req.query.email || '';
-    res.send(renderLoginPage('', prefill));
+    var redirect = req.query.redirect || '';
+    res.send(renderLoginPage('', prefill, redirect));
 });
 
 router.post('/login', async function(req, res) {
@@ -38,7 +39,10 @@ router.post('/login', async function(req, res) {
             return res.send(renderLoginPage('Failed to send verification code. Please try again.', email));
         }
 
-        res.redirect('/verify?email=' + encodeURIComponent(email));
+        var redirectParam = (req.body.redirect || '').trim();
+        var verifyUrl = '/verify?email=' + encodeURIComponent(email);
+        if (redirectParam) verifyUrl += '&redirect=' + encodeURIComponent(redirectParam);
+        res.redirect(verifyUrl);
     } catch (err) {
         console.error('[Auth] OTP send exception:', err.message);
         res.send(renderLoginPage('Something went wrong. Please try again.', email));
@@ -48,7 +52,8 @@ router.post('/login', async function(req, res) {
 router.get('/verify', function(req, res) {
     var email = (req.query.email || '').trim();
     if (!email) return res.redirect('/login');
-    res.send(renderVerifyPage(email, ''));
+    var redirect = req.query.redirect || '';
+    res.send(renderVerifyPage(email, '', redirect));
 });
 
 router.post('/verify', async function(req, res) {
@@ -93,7 +98,10 @@ router.post('/verify', async function(req, res) {
         }
 
         setAuthCookies(res, result.data.session.access_token, result.data.session.refresh_token);
-        res.redirect('/');
+        var redirectTo = (req.body.redirect || '').trim();
+        // Only allow relative redirects (prevent open redirect)
+        if (!redirectTo || redirectTo[0] !== '/') redirectTo = '/';
+        res.redirect(redirectTo);
     } catch (err) {
         console.error('[Auth] OTP verify exception:', err.message);
         res.send(renderVerifyPage(email, 'Something went wrong. Please try again.'));
