@@ -133,7 +133,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
         parts.push('</div>');
     } else {
         parts.push('<div class="auth">');
-        parts.push('  <span>Sign in with your @tamu.edu email to see who\'s in each cluster and their contact details.</span>');
+        parts.push('  <span>Sign in with your @tamu.edu email to see who\'s in each cluster.</span>');
         parts.push('  <a href="/login?redirect=/clusters">Sign in with @tamu.edu &rarr;</a>');
         parts.push('</div>');
     }
@@ -161,6 +161,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
         parts.push('</div>');
     }
 
+    var clusterIndex = 0;
     for (var di = 0; di < dayOrder.length; di++) {
         var dateKey = dayOrder[di];
         var dayClusters = dayMap[dateKey];
@@ -188,7 +189,8 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
             var waitingClass = (!hasNeeds || !hasOffers) ? ' waiting' : '';
             var clickableClass = loggedIn ? ' clickable' : '';
 
-            parts.push('  <article class="cluster' + waitingClass + clickableClass + '">');
+            parts.push('  <article class="cluster' + waitingClass + clickableClass + '" style="animation-delay:' + (clusterIndex * 60) + 'ms">');
+            clusterIndex++;
             parts.push('    <div class="cluster-head" onclick="toggleCluster(this)">');
             parts.push('      <h2>' + h.escHtml(cluster.originCorridor) + ' &rarr; ' + h.escHtml(cluster.destCorridor) + '</h2>');
             parts.push('      <div class="cluster-meta">');
@@ -213,6 +215,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
             if (loggedIn) {
                 // Level 1: expandable detail body with posts
                 parts.push('    <div class="cluster-body">');
+                parts.push('      <div class="cluster-body-inner">');
 
                 // Render offers first, then needs
                 var offers = [];
@@ -246,6 +249,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
                 // Phone verify CTA
                 parts.push('      <div class="verify-cta">');
                 parts.push('        <span>Verify your phone to see contact details and connect with riders.</span>');
+                parts.push('      </div>');
                 parts.push('      </div>');
 
                 parts.push('    </div>');
@@ -315,7 +319,7 @@ var CSS = [
     '  --border: #e4e4e0;',
     '  --text: #1a1a18;',
     '  --text-soft: #575752;',
-    '  --text-muted: #8c8c86;',
+    '  --text-muted: #737370;',
     '  --need-bg: #edf7ef;',
     '  --need-text: #257043;',
     '  --offer-bg: #eef4fc;',
@@ -366,11 +370,12 @@ var CSS = [
     // Cluster card
     '.cluster { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }',
     '.cluster-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; background: var(--surface-soft); border-bottom: 1px solid var(--border); }',
-    '.clickable .cluster-head { cursor: pointer; user-select: none; }',
+    '.clickable .cluster-head { cursor: pointer; user-select: none; transition: transform 0.15s ease, background 0.15s ease; }',
     '.clickable .cluster-head:hover { background: #f5f5f2; }',
+    '.clickable .cluster-head:active { transform: scale(0.99); }',
     '.cluster-head h2 { margin: 0; font-size: 17px; letter-spacing: -0.03em; }',
     '.cluster-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: end; }',
-    '.expand-arrow { font-size: 14px; color: var(--text-muted); transition: transform 0.2s; }',
+    '.expand-arrow { font-size: 18px; color: var(--text-muted); transition: transform 0.2s; }',
     '.cluster.open .expand-arrow { transform: rotate(180deg); }',
 
     // Pills
@@ -380,8 +385,9 @@ var CSS = [
     '.pill-signal { background: var(--signal-bg); border-color: #f1dfab; color: var(--signal-text); }',
 
     // Cluster body (Level 1 detail — hidden by default, shown when .open)
-    '.cluster-body { display: none; padding: 0; }',
-    '.cluster.open .cluster-body { display: block; }',
+    '.cluster-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 300ms cubic-bezier(0.16, 1, 0.3, 1); }',
+    '.cluster-body > .cluster-body-inner { min-height: 0; overflow: hidden; }',
+    '.cluster.open .cluster-body { grid-template-rows: 1fr; }',
 
     // Post sections
     '.post-section { padding: 6px 16px 10px; }',
@@ -398,7 +404,7 @@ var CSS = [
     '.post-type { font-size: 12px; color: var(--text-muted); }',
     '.post-time { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text-soft); background: var(--surface-soft); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); }',
     '.post-route { font-size: 12.5px; color: var(--text-soft); margin-top: 4px; }',
-    '.post-msg { font-size: 13px; color: var(--text-soft); margin-top: 6px; font-style: italic; line-height: 1.5; }',
+    '.post-msg { font-size: 15px; color: var(--text-soft); margin-top: 8px; font-style: italic; line-height: 1.5; }',
     '.post-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }',
     '.post-contact { font-size: 12px; color: var(--signal-text); background: var(--signal-bg); padding: 3px 10px; border-radius: 6px; border: 1px solid #f1dfab; font-weight: 600; }',
     '.post-posted { font-size: 11px; color: var(--text-muted); }',
@@ -409,12 +415,19 @@ var CSS = [
     // Cluster footer
     '.cluster-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; background: var(--maroon-soft); }',
     '.cluster-foot p { margin: 0; font-size: 12.5px; color: var(--text-soft); }',
-    '.foot-hint { font-size: 11px; color: var(--text-muted); }',
+    '.foot-hint { font-size: 11px; color: #6b6b66; }',
 
     // Button
-    '.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: none; border-radius: 8px; background: var(--maroon); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; }',
+    '.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: none; border-radius: 8px; background: var(--maroon); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; transition: transform 0.15s ease, background 0.15s ease; }',
     '.btn:hover { background: #6b0000; }',
+    '.btn:active { transform: translateY(1px) scale(0.98); }',
     '.waiting .cluster-head { background: #fcfcfa; }',
+
+    // Animations
+    '@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }',
+    '.cluster { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }',
+    '.day { animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }',
+    '@media (prefers-reduced-motion: reduce) { .cluster, .day { animation: none; } }',
 
     // Responsive
     '@media (max-width: 860px) {',
