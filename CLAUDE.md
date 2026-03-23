@@ -8,8 +8,10 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - `parser.js` — Sends messages to LLM (OpenRouter), extracts ride intent/date/time
 - `db.js` — Supabase CRUD, dedup, contact resolution
 - `matcher.js` — Matches needs↔offers, scores quality (strong/medium/low)
-- `normalize.js` — Location name normalization
+- `normalize.js` — Location name normalization + corridor grouping (`getClusterCorridor`)
 - `dashboard.js` — Express app wiring (routes in `routes/`, middleware in `middleware/`, shared code in `lib/`)
+- `lib/clusters.js` — Cluster grouping query (by date + origin corridor + dest corridor)
+- `routes/clusters.js` — Public cluster board at `/clusters` (Level 0: headers + counts only)
 - `monitor.js` — PM2 health dashboard
 
 ## Key Facts
