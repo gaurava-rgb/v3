@@ -341,6 +341,19 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
         }
 
         parts.push('</section>');
+
+        // B2B CTA — after first day section only
+        if (di === 0) {
+            parts.push('<div class="biz-cta">');
+            parts.push('  <div class="biz-cta-inner">');
+            parts.push('    <div class="biz-cta-text">');
+            parts.push('      <strong>Run a cab or shuttle service?</strong>');
+            parts.push('      <span>Students on these routes need rides. Partner with RideSplit to reach them.</span>');
+            parts.push('    </div>');
+            parts.push('    <button class="biz-cta-btn" onclick="this.innerHTML=\'Text Howdy at <strong>(936) 337-3986</strong>\';this.onclick=null;this.style.cursor=\'default\';">Get in touch &rarr;</button>');
+            parts.push('  </div>');
+            parts.push('</div>');
+        }
     }
 
     parts.push('</main>');
@@ -564,6 +577,15 @@ var CSS = [
     '.filter-empty-title { font-size: 16px; font-weight: 600; color: var(--text-soft); margin: 0 0 6px; }',
     '.filter-empty-sub { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; max-width: 360px; margin-left: auto; margin-right: auto; line-height: 1.5; }',
 
+    // B2B CTA
+    '.biz-cta { padding: 0 4px; }',
+    '.biz-cta-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border: 1px dashed #c8c8c4; border-radius: 12px; background: #fafaf8; }',
+    '.biz-cta-text { display: flex; flex-direction: column; gap: 2px; }',
+    '.biz-cta-text strong { font-size: 13px; color: var(--text-soft); letter-spacing: -0.01em; }',
+    '.biz-cta-text span { font-size: 12px; color: var(--text-muted); line-height: 1.4; }',
+    '.biz-cta-btn { padding: 8px 16px; border: none; border-radius: 8px; background: var(--text-soft); color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 150ms ease; }',
+    '.biz-cta-btn:hover { background: var(--text); }',
+
     // Animations
     '@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }',
     '.cluster { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }',
@@ -590,6 +612,7 @@ var CSS = [
     '  .hero h1 { font-size: 24px; }',
     '  .post-section { padding-left: 12px; padding-right: 12px; }',
     '  .verify-cta { padding-left: 12px; padding-right: 12px; }',
+    '  .biz-cta-inner { flex-direction: column; align-items: start; gap: 10px; }',
     '  .day-head { top: 0; flex-wrap: wrap; }',
     '  .post-top { gap: 6px; }',
     '  .post-time { margin-left: 0; }',
