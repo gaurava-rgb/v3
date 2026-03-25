@@ -25,6 +25,7 @@ app.use('/public', express.static(__dirname + '/public'));
 app.use(require('./routes/public'));
 app.use(require('./routes/clusters'));
 app.use(require('./routes/auth'));
+app.use(require('./routes/phone'));
 app.use(require('./routes/submit'));
 app.use(require('./routes/digest'));
 app.use(require('./routes/static'));
@@ -33,5 +34,5 @@ app.use(require('./routes/static'));
 
 var PORT = process.env.DASHBOARD_PORT || 3004;
 app.listen(PORT, '0.0.0.0', function() {
-    console.log('[Dashboard] v3.6 running at http://localhost:' + PORT);
+    console.log('[Dashboard] v3.9 running at http://localhost:' + PORT);
 });

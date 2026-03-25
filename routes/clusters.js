@@ -2,12 +2,13 @@
  * GET /clusters — Cluster board with auth ladder
  * Level 0 (no login): headers + counts only
  * Level 1 (@tamu.edu login): expand clusters to see names, messages, timing
+ * Level 2 (phone verified): see full phone numbers + WhatsApp links
  */
 
 var express = require('express');
 var router = express.Router();
 var { fetchClusters } = require('../lib/clusters');
-var { optionalAuth } = require('../middleware/auth');
+var { optionalAuth, loadAppUser } = require('../middleware/auth');
 var h = require('../lib/helpers');
 
 router.get('/clusters', optionalAuth, async function(req, res) {
@@ -33,7 +34,14 @@ router.get('/clusters', optionalAuth, async function(req, res) {
             totalPosts += clusters[si].needCount + clusters[si].offerCount;
         }
 
-        var html = renderBoard(dayOrder, dayMap, totalClusters, totalPosts, req.user);
+        // Check phone verification status
+        var phoneVerified = false;
+        if (req.user) {
+            var appUser = await loadAppUser(req.user.email);
+            if (appUser && appUser.phone_verified_at) phoneVerified = true;
+        }
+
+        var html = renderBoard(dayOrder, dayMap, totalClusters, totalPosts, req.user, phoneVerified);
         res.send(html);
     } catch (err) {
         console.error('[Clusters] Error:', err.message);
@@ -48,7 +56,7 @@ function firstName(name) {
     return String(name).trim().split(/\s+/)[0];
 }
 
-function renderPost(post) {
+function renderPost(post, phoneVerified) {
     var isOffer = post.request_type === 'offer';
     var typeClass = isOffer ? 'post-offer' : 'post-need';
     var typeLabel = isOffer ? 'Offering a ride' : 'Looking for a ride';
@@ -82,7 +90,16 @@ function renderPost(post) {
     }
 
     parts.push('          <div class="post-meta">');
-    parts.push('            <span class="post-contact">Verify phone to see contact</span>');
+    if (phoneVerified && post.source_contact) {
+        var phone = h.digestFormatPhone(post.source_contact);
+        var digits = h.phoneDigitsOnly(post.source_contact);
+        parts.push('            <span class="post-contact post-contact-revealed">' + h.escHtml(phone) + '</span>');
+        if (digits) {
+            parts.push('            <a class="wa-btn" href="https://wa.me/' + h.escHtml(digits) + '" target="_blank" rel="noopener">WhatsApp</a>');
+        }
+    } else {
+        parts.push('            <a class="post-contact" href="/phone">Verify phone to see contact</a>');
+    }
     parts.push('            <span class="post-posted">Posted ' + h.escHtml(posted) + '</span>');
     parts.push('          </div>');
     parts.push('        </div>');
@@ -92,7 +109,7 @@ function renderPost(post) {
 
 // ── Main render ─────────────────────────────────────────────────────────
 
-function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
+function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVerified) {
     var loggedIn = !!user;
     var parts = [];
 
@@ -126,15 +143,20 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
     parts.push('</header>');
 
     // Auth banner — changes based on login state
-    if (loggedIn) {
+    if (loggedIn && phoneVerified) {
         parts.push('<div class="auth auth-loggedin">');
-        parts.push('  <span>Signed in as <strong>' + h.escHtml(user.email) + '</strong> — click any cluster to see details.</span>');
+        parts.push('  <span>Signed in as <strong>' + h.escHtml(user.email) + '</strong> — phone verified. Contact details visible.</span>');
+        parts.push('  <a href="/logout">Sign out</a>');
+        parts.push('</div>');
+    } else if (loggedIn) {
+        parts.push('<div class="auth auth-loggedin">');
+        parts.push('  <span>Signed in as <strong>' + h.escHtml(user.email) + '</strong> — <a href="/phone" style="color:inherit;font-weight:700;text-decoration:underline;">Verify your phone</a> to see contacts.</span>');
         parts.push('  <a href="/logout">Sign out</a>');
         parts.push('</div>');
     } else {
         parts.push('<div class="auth">');
         parts.push('  <span>Sign in with your @tamu.edu email to see who\'s in each cluster.</span>');
-        parts.push('  <a href="/login?redirect=/clusters">Sign in with @tamu.edu &rarr;</a>');
+        parts.push('  <a href="/login?redirect=/clusters">Sign in &rarr;</a>');
         parts.push('</div>');
     }
 
@@ -189,7 +211,18 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
             var waitingClass = (!hasNeeds || !hasOffers) ? ' waiting' : '';
             var clickableClass = loggedIn ? ' clickable' : '';
 
-            parts.push('  <article class="cluster' + waitingClass + clickableClass + '" style="animation-delay:' + (clusterIndex * 60) + 'ms">');
+            // Build data attributes for contact view logging
+            var dataAttrs = '';
+            if (phoneVerified && cluster.posts) {
+                var clusterKey = (dateKey || '') + '|' + (cluster.originCorridor || '') + '|' + (cluster.destCorridor || '');
+                var contacts = [];
+                for (var di = 0; di < cluster.posts.length; di++) {
+                    if (cluster.posts[di].source_contact) contacts.push(cluster.posts[di].source_contact);
+                }
+                dataAttrs = ' data-ck="' + h.escHtml(clusterKey) + '" data-contacts="' + h.escHtml(JSON.stringify(contacts)) + '"';
+            }
+
+            parts.push('  <article class="cluster' + waitingClass + clickableClass + '"' + dataAttrs + ' style="animation-delay:' + (clusterIndex * 60) + 'ms">');
             clusterIndex++;
             parts.push('    <div class="cluster-head" onclick="toggleCluster(this)">');
             parts.push('      <h2>' + h.escHtml(cluster.originCorridor) + ' &rarr; ' + h.escHtml(cluster.destCorridor) + '</h2>');
@@ -232,7 +265,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
                     parts.push('      <div class="post-section">');
                     parts.push('        <div class="post-section-label post-section-offer">Rides offered</div>');
                     for (var oi = 0; oi < offers.length; oi++) {
-                        parts.push(renderPost(offers[oi]));
+                        parts.push(renderPost(offers[oi], phoneVerified));
                     }
                     parts.push('      </div>');
                 }
@@ -241,15 +274,17 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
                     parts.push('      <div class="post-section">');
                     parts.push('        <div class="post-section-label post-section-need">Looking for rides</div>');
                     for (var ni = 0; ni < needs.length; ni++) {
-                        parts.push(renderPost(needs[ni]));
+                        parts.push(renderPost(needs[ni], phoneVerified));
                     }
                     parts.push('      </div>');
                 }
 
-                // Phone verify CTA
-                parts.push('      <div class="verify-cta">');
-                parts.push('        <span>Verify your phone to see contact details and connect with riders.</span>');
-                parts.push('      </div>');
+                // Phone verify CTA (only shown if not yet verified)
+                if (!phoneVerified) {
+                    parts.push('      <div class="verify-cta">');
+                    parts.push('        <a href="/phone" style="color:inherit;font-weight:600;text-decoration:underline;">Verify your phone</a> to see contact details and connect with riders.');
+                    parts.push('      </div>');
+                }
                 parts.push('      </div>');
 
                 parts.push('    </div>');
@@ -287,10 +322,20 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user) {
 
     if (loggedIn) {
         // Expand/collapse for logged-in users
+        parts.push('var logged={};');
         parts.push('function toggleCluster(head){');
         parts.push('  var article=head.closest(".cluster");');
         parts.push('  if(!article)return;');
+        parts.push('  var wasOpen=article.classList.contains("open");');
         parts.push('  article.classList.toggle("open");');
+        if (phoneVerified) {
+            // Log contact reveals when phone-verified user opens a cluster
+            parts.push('  if(!wasOpen&&article.dataset.ck&&!logged[article.dataset.ck]){');
+            parts.push('    logged[article.dataset.ck]=1;');
+            parts.push('    var cc=JSON.parse(article.dataset.contacts||"[]");');
+            parts.push('    if(cc.length)fetch("/log-view",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cluster_key:article.dataset.ck,contacts:cc})});');
+            parts.push('  }');
+        }
         parts.push('}');
     } else {
         // Non-logged-in click redirects to login
@@ -406,7 +451,11 @@ var CSS = [
     '.post-route { font-size: 12.5px; color: var(--text-soft); margin-top: 4px; }',
     '.post-msg { font-size: 15px; color: var(--text-soft); margin-top: 8px; font-style: italic; line-height: 1.5; }',
     '.post-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }',
-    '.post-contact { font-size: 12px; color: var(--signal-text); background: var(--signal-bg); padding: 3px 10px; border-radius: 6px; border: 1px solid #f1dfab; font-weight: 600; }',
+    '.post-contact { font-size: 12px; color: var(--signal-text); background: var(--signal-bg); padding: 3px 10px; border-radius: 6px; border: 1px solid #f1dfab; font-weight: 600; text-decoration: none; }',
+    '.post-contact:hover { text-decoration: underline; }',
+    '.post-contact-revealed { color: var(--text); background: var(--surface-soft); border-color: var(--border); font-size: 13px; font-weight: 700; letter-spacing: 0.01em; }',
+    '.wa-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 6px; background: #25D366; color: #fff; font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap; }',
+    '.wa-btn:hover { background: #1fb855; }',
     '.post-posted { font-size: 11px; color: var(--text-muted); }',
 
     // Verify CTA inside cluster body
