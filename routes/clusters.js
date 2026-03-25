@@ -35,10 +35,10 @@ router.get('/clusters', optionalAuth, async function(req, res) {
         }
 
         // Check phone verification status
+        // TODO: re-enable phone verification gate once SMS/WhatsApp OTP is live
         var phoneVerified = false;
         if (req.user) {
-            var appUser = await loadAppUser(req.user.email);
-            if (appUser && appUser.phone_verified_at) phoneVerified = true;
+            phoneVerified = true;
         }
 
         var html = renderBoard(dayOrder, dayMap, totalClusters, totalPosts, req.user, phoneVerified);
