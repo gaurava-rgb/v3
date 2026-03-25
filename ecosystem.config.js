@@ -17,8 +17,6 @@ module.exports = {
             max_restarts: 10,
             autorestart: true,
             watch: false,
-            max_memory_restart: '800M',
-            node_args: '--max-old-space-size=768',
             env: { NODE_ENV: 'production', TZ: 'America/Chicago' },
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
         },

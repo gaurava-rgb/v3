@@ -35,10 +35,10 @@ router.get('/clusters', optionalAuth, async function(req, res) {
         }
 
         // Check phone verification status
-        // TODO: re-enable phone verification gate once SMS/WhatsApp OTP is live
         var phoneVerified = false;
         if (req.user) {
-            phoneVerified = true;
+            var appUser = await loadAppUser(req.user.email);
+            if (appUser && appUser.phone_verified_at) phoneVerified = true;
         }
 
         var html = renderBoard(dayOrder, dayMap, totalClusters, totalPosts, req.user, phoneVerified);
@@ -168,9 +168,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
     parts.push('    <div class="legend" style="color:var(--text-muted)">Grouped by same day + route</div>');
     parts.push('  </div>');
     parts.push('  <div class="topbar-right">');
-    if (!loggedIn) {
-        parts.push('    <a href="/login?redirect=/clusters" class="topbar-signin">Sign in to see details &rarr;</a>');
-    }
+    parts.push('    <a href="/" style="font-size:12.5px;color:var(--maroon);text-decoration:none;font-weight:600;">View table board &rarr;</a>');
     parts.push('    <div class="clock" id="clock">-- CT</div>');
     parts.push('  </div>');
     parts.push('</div>');
@@ -236,7 +234,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
         parts.push('  <div class="day-head">');
         parts.push('    <strong>' + h.escHtml(dateLabel) + '</strong>');
         if (isToday) parts.push('    <div class="today">Today</div>');
-        parts.push('    <span class="day-stats">' + dayClusters.length + ' cluster' + (dayClusters.length !== 1 ? 's' : '') + ', ' + dayPosts + ' post' + (dayPosts !== 1 ? 's' : '') + '</span>');
+        parts.push('    <span>' + dayClusters.length + ' cluster' + (dayClusters.length !== 1 ? 's' : '') + ', ' + dayPosts + ' post' + (dayPosts !== 1 ? 's' : '') + '</span>');
         parts.push('  </div>');
 
         for (var ci = 0; ci < dayClusters.length; ci++) {
@@ -334,6 +332,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
                 // Level 0: summary footer only
                 parts.push('    <div class="cluster-foot">');
                 parts.push('      <p>' + total + ' ' + (total === 1 ? 'person' : 'people') + ' on this route</p>');
+                parts.push('      <a class="btn" href="/login?redirect=/clusters">Sign in to see details</a>');
                 parts.push('    </div>');
             }
 
@@ -341,19 +340,6 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
         }
 
         parts.push('</section>');
-
-        // B2B CTA — after first day section only
-        if (di === 0) {
-            parts.push('<div class="biz-cta">');
-            parts.push('  <div class="biz-cta-inner">');
-            parts.push('    <div class="biz-cta-text">');
-            parts.push('      <strong>Run a cab or shuttle service?</strong>');
-            parts.push('      <span>Students on these routes need rides. Partner with RideSplit to reach them.</span>');
-            parts.push('    </div>');
-            parts.push('    <button class="biz-cta-btn" onclick="this.innerHTML=\'Text Howdy at <strong>(936) 337-3986</strong>\';this.onclick=null;this.style.cursor=\'default\';">Get in touch &rarr;</button>');
-            parts.push('  </div>');
-            parts.push('</div>');
-        }
     }
 
     parts.push('</main>');
@@ -460,8 +446,7 @@ var CSS = [
     '  color: var(--text);',
     '  line-height: 1.45;',
     '}',
-    '.page { max-width: 1080px; margin: 0 auto; padding: 26px 20px 56px; }',
-    'body { overflow-x: hidden; }',
+    '.page { max-width: 1080px; margin: 0 auto; padding: 26px 20px 56px; overflow-x: hidden; }',
     '.hero { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }',
     '.hero h1 { margin: 0; font-size: 28px; letter-spacing: -0.04em; }',
     '.hero h1 span { color: var(--maroon); }',
@@ -483,18 +468,15 @@ var CSS = [
     '.icon { width: 18px; height: 18px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }',
     '.icon-need { background: var(--need-bg); color: var(--need-text); }',
     '.icon-offer { background: var(--offer-bg); color: var(--offer-text); }',
-    '.topbar-signin { font-size: 12.5px; color: var(--maroon); font-weight: 600; text-decoration: none; white-space: nowrap; }',
-    '.topbar-signin:hover { text-decoration: underline; }',
     '.clock { font-size: 12px; color: var(--text-muted); white-space: nowrap; }',
 
     // Content grid
     '.content { display: grid; gap: 24px; }',
     '.day { display: grid; gap: 10px; }',
-    '.day-head { position: sticky; top: 46px; z-index: 15; display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1.5px solid var(--border); background: var(--bg); }',
+    '.day-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1.5px solid var(--border); }',
     '.day-head strong { font-size: 15px; letter-spacing: -0.02em; }',
-    '.day-stats { margin-left: auto; }',
     '.today { padding: 2px 8px; border-radius: 999px; background: var(--need-bg); color: var(--need-text); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }',
-    '.day-head span { font-size: 12px; color: var(--text-muted); }',
+    '.day-head span { margin-left: auto; font-size: 12px; color: var(--text-muted); }',
 
     // Cluster card
     '.cluster { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }',
@@ -577,15 +559,6 @@ var CSS = [
     '.filter-empty-title { font-size: 16px; font-weight: 600; color: var(--text-soft); margin: 0 0 6px; }',
     '.filter-empty-sub { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; max-width: 360px; margin-left: auto; margin-right: auto; line-height: 1.5; }',
 
-    // B2B CTA
-    '.biz-cta { padding: 0 4px; }',
-    '.biz-cta-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border: 1px dashed #c8c8c4; border-radius: 12px; background: #fafaf8; }',
-    '.biz-cta-text { display: flex; flex-direction: column; gap: 2px; }',
-    '.biz-cta-text strong { font-size: 13px; color: var(--text-soft); letter-spacing: -0.01em; }',
-    '.biz-cta-text span { font-size: 12px; color: var(--text-muted); line-height: 1.4; }',
-    '.biz-cta-btn { padding: 8px 16px; border: none; border-radius: 8px; background: var(--text-soft); color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 150ms ease; }',
-    '.biz-cta-btn:hover { background: var(--text); }',
-
     // Animations
     '@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }',
     '.cluster { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }',
@@ -612,8 +585,6 @@ var CSS = [
     '  .hero h1 { font-size: 24px; }',
     '  .post-section { padding-left: 12px; padding-right: 12px; }',
     '  .verify-cta { padding-left: 12px; padding-right: 12px; }',
-    '  .biz-cta-inner { flex-direction: column; align-items: start; gap: 10px; }',
-    '  .day-head { top: 0; flex-wrap: wrap; }',
     '  .post-top { gap: 6px; }',
     '  .post-time { margin-left: 0; }',
     '}'
