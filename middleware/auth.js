@@ -2,7 +2,7 @@
  * Authentication middleware for dashboard routes.
  */
 
-var { authClient, readClient, writeClient } = require('../lib/supabase');
+var { authClient } = require('../lib/supabase');
 
 var DIGEST_KEY = process.env.DIGEST_KEY || '';
 
@@ -76,66 +76,11 @@ function digestAuth(req, res) {
     return true;
 }
 
-/**
- * requireAuth — like optionalAuth but redirects to login if not authenticated
- */
-function requireAuth(redirectTo) {
-    return async function(req, res, next) {
-        await optionalAuth(req, res, function() {
-            if (!req.user) {
-                return res.redirect('/login?redirect=' + encodeURIComponent(redirectTo || req.originalUrl));
-            }
-            next();
-        });
-    };
-}
-
-/**
- * Upsert app user row after successful auth. Returns the users table row.
- */
-async function upsertAppUser(email, name) {
-    if (!email) return null;
-    try {
-        var payload = { email: email.toLowerCase() };
-        if (name) payload.name = name;
-        var { data, error } = await writeClient
-            .from('users')
-            .upsert(payload, { onConflict: 'email', ignoreDuplicates: false })
-            .select()
-            .single();
-        if (error) console.error('[Auth] upsertAppUser error:', error.message);
-        return data;
-    } catch (e) {
-        console.error('[Auth] upsertAppUser exception:', e.message);
-        return null;
-    }
-}
-
-/**
- * Load app user (from our users table) by email. Returns null if not found.
- */
-async function loadAppUser(email) {
-    if (!email) return null;
-    try {
-        var { data } = await readClient
-            .from('users')
-            .select('*')
-            .eq('email', email.toLowerCase())
-            .single();
-        return data;
-    } catch (e) {
-        return null;
-    }
-}
-
 module.exports = {
     authClient,
     DIGEST_KEY,
     setAuthCookies,
     clearAuthCookies,
     optionalAuth,
-    requireAuth,
-    upsertAppUser,
-    loadAppUser,
     digestAuth
 };

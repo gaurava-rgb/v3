@@ -206,23 +206,6 @@ async function saveRequest(data) {
         return null;
     }
 
-    // Cross-group repost check: same contact, same raw message text within 1 hour
-    if (data.rawMessage && data.sourceContact) {
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        const { data: repost } = await supabase
-            .from('v3_requests')
-            .select('id, source_group')
-            .eq('source_contact', data.sourceContact)
-            .eq('raw_message', data.rawMessage)
-            .gte('created_at', oneHourAgo)
-            .limit(1)
-            .single();
-        if (repost) {
-            console.log(`[DB] Cross-group repost suppressed: ${data.sourceContact} same message in ${data.sourceGroup} (original in ${repost.source_group}, request ${repost.id})`);
-            return null;
-        }
-    }
-
     const normOrigin = normalizeLocation(data.origin);
     const normDest = normalizeLocation(data.destination);
 

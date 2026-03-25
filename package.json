@@ -1,6 +1,6 @@
 {
   "name": "aggieconnect-baileys-v3",
-  "version": "3.9.0",
+  "version": "3.6.0",
   "description": "Aggie Connect — Baileys v3 (fuzzy dates, match quality, trip cluster dashboard)",
   "main": "bot.js",
   "scripts": {
@@ -9,7 +9,6 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.1016.0",
     "@hapi/boom": "^10.0.1",
     "@supabase/supabase-js": "^2.39.0",
     "@whiskeysockets/baileys": "^6.7.9",
