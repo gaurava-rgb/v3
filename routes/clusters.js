@@ -168,7 +168,6 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
     parts.push('    <div class="legend" style="color:var(--text-muted)">Grouped by same day + route</div>');
     parts.push('  </div>');
     parts.push('  <div class="topbar-right">');
-    parts.push('    <a href="/" style="font-size:12.5px;color:var(--maroon);text-decoration:none;font-weight:600;">View table board &rarr;</a>');
     parts.push('    <div class="clock" id="clock">-- CT</div>');
     parts.push('  </div>');
     parts.push('</div>');
@@ -234,7 +233,10 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
         parts.push('  <div class="day-head">');
         parts.push('    <strong>' + h.escHtml(dateLabel) + '</strong>');
         if (isToday) parts.push('    <div class="today">Today</div>');
-        parts.push('    <span>' + dayClusters.length + ' cluster' + (dayClusters.length !== 1 ? 's' : '') + ', ' + dayPosts + ' post' + (dayPosts !== 1 ? 's' : '') + '</span>');
+        parts.push('    <span class="day-stats">' + dayClusters.length + ' cluster' + (dayClusters.length !== 1 ? 's' : '') + ', ' + dayPosts + ' post' + (dayPosts !== 1 ? 's' : '') + '</span>');
+        if (!loggedIn) {
+            parts.push('    <a class="day-signin" href="/login?redirect=/clusters">Sign in to see details &rarr;</a>');
+        }
         parts.push('  </div>');
 
         for (var ci = 0; ci < dayClusters.length; ci++) {
@@ -332,7 +334,6 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
                 // Level 0: summary footer only
                 parts.push('    <div class="cluster-foot">');
                 parts.push('      <p>' + total + ' ' + (total === 1 ? 'person' : 'people') + ' on this route</p>');
-                parts.push('      <a class="btn" href="/login?redirect=/clusters">Sign in to see details</a>');
                 parts.push('    </div>');
             }
 
@@ -473,10 +474,13 @@ var CSS = [
     // Content grid
     '.content { display: grid; gap: 24px; }',
     '.day { display: grid; gap: 10px; }',
-    '.day-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1.5px solid var(--border); }',
+    '.day-head { position: sticky; top: 46px; z-index: 15; display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1.5px solid var(--border); background: var(--bg); }',
     '.day-head strong { font-size: 15px; letter-spacing: -0.02em; }',
+    '.day-stats { margin-left: auto; }',
+    '.day-signin { font-size: 12px; color: var(--maroon); font-weight: 600; text-decoration: none; white-space: nowrap; }',
+    '.day-signin:hover { text-decoration: underline; }',
     '.today { padding: 2px 8px; border-radius: 999px; background: var(--need-bg); color: var(--need-text); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }',
-    '.day-head span { margin-left: auto; font-size: 12px; color: var(--text-muted); }',
+    '.day-head span { font-size: 12px; color: var(--text-muted); }',
 
     // Cluster card
     '.cluster { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }',
@@ -585,6 +589,7 @@ var CSS = [
     '  .hero h1 { font-size: 24px; }',
     '  .post-section { padding-left: 12px; padding-right: 12px; }',
     '  .verify-cta { padding-left: 12px; padding-right: 12px; }',
+    '  .day-head { top: 0; flex-wrap: wrap; }',
     '  .post-top { gap: 6px; }',
     '  .post-time { margin-left: 0; }',
     '}'
