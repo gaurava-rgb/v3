@@ -173,8 +173,42 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
     parts.push('  </div>');
     parts.push('</div>');
 
+    // Filter bar
+    parts.push('<div class="filter-bar">');
+    parts.push('  <div class="filter-row">');
+    parts.push('    <span class="filter-label">From</span>');
+    parts.push('    <div class="filter-pills" role="radiogroup" aria-label="Filter by origin">');
+    parts.push('      <button class="fpill active" data-filter="from" data-val="" role="radio" aria-checked="true">All</button>');
+    parts.push('      <button class="fpill" data-filter="from" data-val="Dallas area" role="radio" aria-checked="false">Dallas</button>');
+    parts.push('      <button class="fpill" data-filter="from" data-val="Houston area" role="radio" aria-checked="false">Houston</button>');
+    parts.push('      <button class="fpill" data-filter="from" data-val="Austin area" role="radio" aria-checked="false">Austin</button>');
+    parts.push('      <button class="fpill" data-filter="from" data-val="College Station" role="radio" aria-checked="false">College Stn</button>');
+    parts.push('      <button class="fpill" data-filter="from" data-val="San Antonio" role="radio" aria-checked="false">San Antonio</button>');
+    parts.push('    </div>');
+    parts.push('  </div>');
+    parts.push('  <div class="filter-row">');
+    parts.push('    <span class="filter-label">To</span>');
+    parts.push('    <div class="filter-pills" role="radiogroup" aria-label="Filter by destination">');
+    parts.push('      <button class="fpill active" data-filter="to" data-val="" role="radio" aria-checked="true">All</button>');
+    parts.push('      <button class="fpill" data-filter="to" data-val="Dallas area" role="radio" aria-checked="false">Dallas</button>');
+    parts.push('      <button class="fpill" data-filter="to" data-val="Houston area" role="radio" aria-checked="false">Houston</button>');
+    parts.push('      <button class="fpill" data-filter="to" data-val="Austin area" role="radio" aria-checked="false">Austin</button>');
+    parts.push('      <button class="fpill" data-filter="to" data-val="College Station" role="radio" aria-checked="false">College Stn</button>');
+    parts.push('      <button class="fpill" data-filter="to" data-val="San Antonio" role="radio" aria-checked="false">San Antonio</button>');
+    parts.push('    </div>');
+    parts.push('  </div>');
+    parts.push('  <div class="filter-status" id="filter-status" style="display:none"></div>');
+    parts.push('</div>');
+
     // Content
     parts.push('<main class="content">');
+
+    // Filter empty state (hidden by default, shown by JS when no clusters match)
+    parts.push('<div class="filter-empty" id="filter-empty" style="display:none">');
+    parts.push('  <p class="filter-empty-title">No clusters match your filters</p>');
+    parts.push('  <p class="filter-empty-sub">Try broadening your search or check back later &mdash; new posts come in from WhatsApp groups daily.</p>');
+    parts.push('  <button class="btn" onclick="clearF()">Clear filters</button>');
+    parts.push('</div>');
 
     if (dayOrder.length === 0) {
         parts.push('<div style="text-align:center;padding:40px 20px;color:var(--text-muted);">');
@@ -222,7 +256,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
                 dataAttrs = ' data-ck="' + h.escHtml(clusterKey) + '" data-contacts="' + h.escHtml(JSON.stringify(contacts)) + '"';
             }
 
-            parts.push('  <article class="cluster' + waitingClass + clickableClass + '"' + dataAttrs + ' style="animation-delay:' + (clusterIndex * 60) + 'ms">');
+            parts.push('  <article class="cluster' + waitingClass + clickableClass + '" data-from="' + h.escHtml(cluster.originCorridor) + '" data-to="' + h.escHtml(cluster.destCorridor) + '"' + dataAttrs + ' style="animation-delay:' + (clusterIndex * 60) + 'ms">');
             clusterIndex++;
             parts.push('    <div class="cluster-head" onclick="toggleCluster(this)">');
             parts.push('      <h2>' + h.escHtml(cluster.originCorridor) + ' &rarr; ' + h.escHtml(cluster.destCorridor) + '</h2>');
@@ -344,6 +378,37 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
         parts.push('}');
     }
 
+    // Filter logic
+    parts.push('var fFrom="",fTo="";');
+    parts.push('function fpClick(b){');
+    parts.push('  var f=b.dataset.filter,v=b.dataset.val;');
+    parts.push('  if(f==="from")fFrom=v;else fTo=v;');
+    parts.push('  var ps=document.querySelectorAll(\'.fpill[data-filter="\'+f+\'"]\');');
+    parts.push('  for(var i=0;i<ps.length;i++){ps[i].classList.toggle("active",ps[i].dataset.val===v);ps[i].setAttribute("aria-checked",ps[i].dataset.val===v?"true":"false");}');
+    parts.push('  runFilter();');
+    parts.push('}');
+    parts.push('function runFilter(){');
+    parts.push('  var cs=document.querySelectorAll("article.cluster"),total=cs.length,shown=0;');
+    parts.push('  for(var i=0;i<cs.length;i++){var mf=!fFrom||cs[i].dataset.from===fFrom;var mt=!fTo||cs[i].dataset.to===fTo;if(mf&&mt){cs[i].classList.remove("fhide");shown++;}else{cs[i].classList.add("fhide");}}');
+    parts.push('  var ds=document.querySelectorAll("section.day");');
+    parts.push('  for(var d=0;d<ds.length;d++){if(ds[d].querySelector("article.cluster:not(.fhide)"))ds[d].classList.remove("fhide");else ds[d].classList.add("fhide");}');
+    parts.push('  var st=document.getElementById("filter-status"),em=document.getElementById("filter-empty");');
+    parts.push('  if(fFrom||fTo){st.innerHTML=\'Showing \'+shown+\' of \'+total+\' clusters <a class="filter-clear" href="javascript:void(0)" onclick="clearF()">Clear filters</a>\';st.style.display="flex";em.style.display=shown===0?"":"none";}');
+    parts.push('  else{st.style.display="none";em.style.display="none";}');
+    parts.push('  var p=new URLSearchParams();if(fFrom)p.set("from",fFrom);if(fTo)p.set("to",fTo);');
+    parts.push('  history.replaceState(null,"",location.pathname+(p.toString()?"?"+p:""));');
+    parts.push('}');
+    parts.push('function clearF(){');
+    parts.push('  fFrom="";fTo="";');
+    parts.push('  var ps=document.querySelectorAll(".fpill");for(var i=0;i<ps.length;i++){ps[i].classList.toggle("active",ps[i].dataset.val==="");ps[i].setAttribute("aria-checked",ps[i].dataset.val===""?"true":"false");}');
+    parts.push('  runFilter();');
+    parts.push('}');
+    parts.push('(function(){');
+    parts.push('  var ps=document.querySelectorAll(".fpill");for(var i=0;i<ps.length;i++)ps[i].addEventListener("click",function(){fpClick(this);});');
+    parts.push('  var u=new URLSearchParams(location.search),pf=u.get("from")||"",pt=u.get("to")||"";');
+    parts.push('  if(pf||pt){fFrom=pf;fTo=pt;for(var i=0;i<ps.length;i++){var f=ps[i].dataset.filter,v=ps[i].dataset.val;ps[i].classList.toggle("active",(f==="from"?v===pf:v===pt)||(f==="from"&&!pf&&v==="")||(f==="to"&&!pt&&v===""));};runFilter();}');
+    parts.push('})();');
+
     parts.push('</script>');
 
     parts.push('</body>');
@@ -380,7 +445,7 @@ var CSS = [
     '  color: var(--text);',
     '  line-height: 1.45;',
     '}',
-    '.page { max-width: 1080px; margin: 0 auto; padding: 26px 20px 56px; }',
+    '.page { max-width: 1080px; margin: 0 auto; padding: 26px 20px 56px; overflow-x: hidden; }',
     '.hero { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }',
     '.hero h1 { margin: 0; font-size: 28px; letter-spacing: -0.04em; }',
     '.hero h1 span { color: var(--maroon); }',
@@ -472,6 +537,27 @@ var CSS = [
     '.btn:active { transform: translateY(1px) scale(0.98); }',
     '.waiting .cluster-head { background: #fcfcfa; }',
 
+    // Filter bar
+    '.filter-bar { padding: 10px 14px; margin: -8px 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }',
+    '.filter-row { display: flex; align-items: center; gap: 10px; }',
+    '.filter-row + .filter-row { margin-top: 8px; }',
+    '.filter-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; min-width: 34px; flex-shrink: 0; }',
+    '.filter-pills { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 2px 0; min-width: 0; }',
+    '.filter-pills::-webkit-scrollbar { display: none; }',
+    '.fpill { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-soft); cursor: pointer; white-space: nowrap; transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 100ms ease; touch-action: manipulation; outline: none; -webkit-tap-highlight-color: transparent; }',
+    '.fpill:hover { background: #f0f0ec; border-color: #d4d4d0; }',
+    '.fpill:active { transform: scale(0.96); }',
+    '.fpill.active { background: var(--maroon); border-color: var(--maroon); color: #fff; }',
+    '.fpill.active:hover { background: #6b0000; border-color: #6b0000; }',
+    '.fpill:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--maroon); }',
+    '.filter-status { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }',
+    '.filter-clear { color: var(--maroon); font-weight: 600; text-decoration: none; cursor: pointer; font-size: 12px; }',
+    '.filter-clear:hover { text-decoration: underline; }',
+    '.fhide { display: none !important; }',
+    '.filter-empty { text-align: center; padding: 40px 20px; }',
+    '.filter-empty-title { font-size: 16px; font-weight: 600; color: var(--text-soft); margin: 0 0 6px; }',
+    '.filter-empty-sub { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; max-width: 360px; margin-left: auto; margin-right: auto; line-height: 1.5; }',
+
     // Animations
     '@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }',
     '.cluster { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }',
@@ -487,6 +573,10 @@ var CSS = [
     '}',
     '@media (max-width: 640px) {',
     '  .page { padding: 16px 10px 36px; }',
+    '  .filter-bar { margin: -4px 0 12px; padding: 8px 10px; }',
+    '  .filter-row { gap: 8px; }',
+    '  .filter-label { min-width: 30px; font-size: 10px; }',
+    '  .fpill { padding: 6px 12px; font-size: 12px; }',
     '  .auth, .topbar, .cluster-foot { flex-direction: column; align-items: start; gap: 8px; }',
     '  .topbar { height: auto; padding: 10px 12px; }',
     '  .topbar-left, .topbar-right { flex-wrap: wrap; gap: 8px 12px; }',
