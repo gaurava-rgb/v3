@@ -168,6 +168,9 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
     parts.push('    <div class="legend" style="color:var(--text-muted)">Grouped by same day + route</div>');
     parts.push('  </div>');
     parts.push('  <div class="topbar-right">');
+    if (!loggedIn) {
+        parts.push('    <a href="/login?redirect=/clusters" class="topbar-signin">Sign in to see details &rarr;</a>');
+    }
     parts.push('    <div class="clock" id="clock">-- CT</div>');
     parts.push('  </div>');
     parts.push('</div>');
@@ -234,9 +237,6 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
         parts.push('    <strong>' + h.escHtml(dateLabel) + '</strong>');
         if (isToday) parts.push('    <div class="today">Today</div>');
         parts.push('    <span class="day-stats">' + dayClusters.length + ' cluster' + (dayClusters.length !== 1 ? 's' : '') + ', ' + dayPosts + ' post' + (dayPosts !== 1 ? 's' : '') + '</span>');
-        if (!loggedIn) {
-            parts.push('    <a class="day-signin" href="/login?redirect=/clusters">Sign in to see details &rarr;</a>');
-        }
         parts.push('  </div>');
 
         for (var ci = 0; ci < dayClusters.length; ci++) {
@@ -470,6 +470,8 @@ var CSS = [
     '.icon { width: 18px; height: 18px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }',
     '.icon-need { background: var(--need-bg); color: var(--need-text); }',
     '.icon-offer { background: var(--offer-bg); color: var(--offer-text); }',
+    '.topbar-signin { font-size: 12.5px; color: var(--maroon); font-weight: 600; text-decoration: none; white-space: nowrap; }',
+    '.topbar-signin:hover { text-decoration: underline; }',
     '.clock { font-size: 12px; color: var(--text-muted); white-space: nowrap; }',
 
     // Content grid
@@ -478,8 +480,6 @@ var CSS = [
     '.day-head { position: sticky; top: 46px; z-index: 15; display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1.5px solid var(--border); background: var(--bg); }',
     '.day-head strong { font-size: 15px; letter-spacing: -0.02em; }',
     '.day-stats { margin-left: auto; }',
-    '.day-signin { font-size: 12px; color: var(--maroon); font-weight: 600; text-decoration: none; white-space: nowrap; }',
-    '.day-signin:hover { text-decoration: underline; }',
     '.today { padding: 2px 8px; border-radius: 999px; background: var(--need-bg); color: var(--need-text); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }',
     '.day-head span { font-size: 12px; color: var(--text-muted); }',
 
