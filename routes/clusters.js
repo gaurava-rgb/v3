@@ -382,6 +382,7 @@ function renderBoard(dayOrder, dayMap, totalClusters, totalPosts, user, phoneVer
     parts.push('var fFrom="",fTo="";');
     parts.push('function fpClick(b){');
     parts.push('  var f=b.dataset.filter,v=b.dataset.val;');
+    parts.push('  if(v!==""&&((f==="from"&&fFrom===v)||(f==="to"&&fTo===v)))v="";');
     parts.push('  if(f==="from")fFrom=v;else fTo=v;');
     parts.push('  var ps=document.querySelectorAll(\'.fpill[data-filter="\'+f+\'"]\');');
     parts.push('  for(var i=0;i<ps.length;i++){ps[i].classList.toggle("active",ps[i].dataset.val===v);ps[i].setAttribute("aria-checked",ps[i].dataset.val===v?"true":"false");}');
