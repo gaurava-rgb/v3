@@ -86,7 +86,7 @@ async function seedGroups(groups) {
  * Persist a LID→phone mapping. Also retroactively updates any existing
  * v3_requests and v3_message_log rows that still hold the raw LID.
  */
-async function upsertContact(lid, phone, name) {
+async function upsertContact(lid, phone, name, { backfill = true } = {}) {
     if (!lid || !phone) return;
 
     const { error: upsertErr } = await supabase.from('wa_contacts').upsert(
@@ -95,7 +95,9 @@ async function upsertContact(lid, phone, name) {
     );
     if (upsertErr) console.error(`[DB] upsertContact failed for lid=${lid} phone=${phone}: ${sanitizeError(upsertErr.message)}`);
 
-    // Backfill existing rows that stored the raw LID
+    // Only backfill when needed (new contact or phone changed)
+    if (!backfill) return;
+
     const [reqResult, logResult] = await Promise.all([
         supabase.from('v3_requests')
             .update({ source_contact: phone })
@@ -121,6 +123,33 @@ async function resolveContactPhone(lid) {
         .maybeSingle();
     if (error) console.error(`[DB] resolveContactPhone failed for lid=${lid}: ${sanitizeError(error.message)}`);
     return data?.phone || null;
+}
+
+/**
+ * Load all contacts from wa_contacts into a Map keyed by lid.
+ * Each value is { phone, name }. Used on startup to avoid redundant upserts.
+ */
+async function loadAllContacts() {
+    const contacts = new Map();
+    let offset = 0;
+    const PAGE = 1000;
+    while (true) {
+        const { data, error } = await supabase
+            .from('wa_contacts')
+            .select('lid, phone, name')
+            .range(offset, offset + PAGE - 1);
+        if (error) {
+            console.error(`[DB] loadAllContacts failed: ${sanitizeError(error.message)}`);
+            break;
+        }
+        if (!data || data.length === 0) break;
+        for (const row of data) {
+            contacts.set(row.lid, { phone: row.phone, name: row.name });
+        }
+        offset += data.length;
+        if (data.length < PAGE) break;
+    }
+    return contacts;
 }
 
 // ============================================================
@@ -344,6 +373,7 @@ module.exports = {
     seedGroups,
     upsertContact,
     resolveContactPhone,
+    loadAllContacts,
     logMessage,
     messageAlreadyProcessed,
     computeRequestHash,

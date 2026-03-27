@@ -23,7 +23,7 @@ const { parseMessage } = require('./parser');
 const {
     saveRequest, logMessage, messageAlreadyProcessed,
     getStats, loadMonitoredGroups, getGroupUpdates, seedGroups,
-    upsertContact, resolveContactPhone
+    upsertContact, resolveContactPhone, loadAllContacts
 } = require('./db');
 const { processRequest, formatMatch } = require('./matcher');
 
@@ -39,6 +39,7 @@ const monitoredGroupIds = new Set();
 const processedMessages = new Set();
 const groupNameCache    = new Map();
 const lidToPhone        = new Map();    // maps @lid user IDs to real phone numbers
+const knownContacts     = new Map();    // maps lid → { phone, name } from DB, used to skip unchanged upserts
 let lastGroupCheck      = new Date();
 let lastGroupFetch      = 0;       // timestamp of last groupFetchAllParticipating call
 let reconnectAttempts   = 0;
@@ -217,11 +218,18 @@ async function onConnected() {
         groupNameCache.set(jid, meta.subject);
     }
 
+    // Pre-load existing contacts from DB to avoid redundant upserts
+    const dbContacts = await loadAllContacts();
+    knownContacts.clear();
+    for (const [lid, data] of dbContacts) {
+        knownContacts.set(lid, data);
+        lidToPhone.set(lid, data.phone);
+    }
+    console.log(`[Bot] Pre-loaded ${knownContacts.size} contacts from DB`);
+
     // Extract LID→phone mappings from group participants.
-    // Handles two addressing modes:
-    //   PN mode: participant.id = phone@s.whatsapp.net, participant.lid = LID@lid
-    //   LID mode: participant.id = LID@lid, participant.jid = phone@s.whatsapp.net
-    let mappingsExtracted = 0;
+    // Only upsert contacts that are new or changed (phone/name differ from DB).
+    let newContacts = 0, changedContacts = 0, skippedContacts = 0;
     for (const [, meta] of Object.entries(allGroups)) {
         for (const participant of (meta.participants || [])) {
             const pid  = participant.id  || '';
@@ -232,26 +240,36 @@ async function onConnected() {
             let lid   = null;
 
             if (pid.endsWith('@s.whatsapp.net') && plid.endsWith('@lid')) {
-                // PN addressing mode: id is phone, lid is LID
                 phone = pid.split('@')[0];
                 lid   = plid.split('@')[0];
             } else if (pid.endsWith('@lid') && pjid.endsWith('@s.whatsapp.net')) {
-                // LID addressing mode: id is LID, jid is phone
                 lid   = pid.split('@')[0];
                 phone = pjid.split('@')[0];
             }
 
-            if (lid && phone && !lidToPhone.has(lid)) {
-                lidToPhone.set(lid, phone);
-                mappingsExtracted++;
-                upsertContact(lid, phone, participant.notify || participant.name || null)
-                    .catch(err => console.error('[Bot] Failed to persist participant mapping:', err.message));
+            if (!lid || !phone) continue;
+
+            lidToPhone.set(lid, phone);
+            const name = participant.notify || participant.name || null;
+            const existing = knownContacts.get(lid);
+
+            if (existing && existing.phone === phone && existing.name === name) {
+                skippedContacts++;
+                continue;
             }
+
+            const isNew = !existing;
+            const phoneChanged = existing && existing.phone !== phone;
+
+            if (isNew) newContacts++;
+            else changedContacts++;
+
+            knownContacts.set(lid, { phone, name });
+            upsertContact(lid, phone, name, { backfill: isNew || phoneChanged })
+                .catch(err => console.error('[Bot] Failed to persist participant mapping:', err.message));
         }
     }
-    if (mappingsExtracted > 0) {
-        console.log(`[Bot] Extracted ${mappingsExtracted} LID→phone mapping(s) from group participants`);
-    }
+    console.log(`[Bot] Contacts: ${newContacts} new, ${changedContacts} changed, ${skippedContacts} skipped (unchanged)`);
 
     const waGroups = Object.entries(allGroups).map(([id, meta]) => ({
         id,
