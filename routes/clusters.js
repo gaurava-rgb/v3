@@ -140,7 +140,7 @@ router.get('/clusters', optionalAuth, async function(req, res) {
         var allReqs = filterActiveRequests(rawReqs, { today: today, cutoff: cutoff, testGroups: testGroupFilter });
 
         var totalCount = allReqs.length;
-        var clusters = buildClusters(allReqs, false);
+        var clusters = buildClusters(allReqs, true);
 
         // Group clusters by date
         var byDate = {};
