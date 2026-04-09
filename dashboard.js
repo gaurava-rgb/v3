@@ -23,6 +23,7 @@ app.use('/public', express.static(__dirname + '/public'));
 // ── Routes ───────────────────────────────────────────────────────────────
 
 app.use(require('./routes/public'));
+app.use(require('./routes/clusters'));
 app.use(require('./routes/auth'));
 app.use(require('./routes/submit'));
 app.use(require('./routes/digest'));
