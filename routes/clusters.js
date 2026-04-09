@@ -18,16 +18,28 @@ function isLeaving(cluster) {
     return o === 'college station' || o === 'cstat' || o === 'bryan' || o === 'cs';
 }
 
+// Format a ride_plan_time value. Passes HH:MM through formatTime(),
+// leaves fuzzy labels (e.g. "evening", "morning") as-is.
+function fmtTime(t) {
+    if (!t) return '';
+    if (/^\d{1,2}:\d{2}$/.test(t)) return formatTime(t);
+    return t;
+}
+
 function timeRange(members) {
     var times = [];
     for (var i = 0; i < members.length; i++) {
         if (members[i].ride_plan_time) times.push(members[i].ride_plan_time);
     }
     if (times.length === 0) return '';
-    times.sort();
-    var first = formatTime(times[0]);
-    var last = formatTime(times[times.length - 1]);
-    return first === last ? first : first + ' &ndash; ' + last;
+    // Prefer a range of concrete HH:MM times; fall back to the first fuzzy label.
+    var hhmm = times.filter(function(t) { return /^\d{1,2}:\d{2}$/.test(t); }).sort();
+    if (hhmm.length > 0) {
+        var first = formatTime(hhmm[0]);
+        var last = formatTime(hhmm[hhmm.length - 1]);
+        return first === last ? first : first + ' &ndash; ' + last;
+    }
+    return times[0];
 }
 
 function clusterSummary(cluster, isLoggedIn) {
@@ -36,7 +48,7 @@ function clusterSummary(cluster, isLoggedIn) {
     if (offers.length > 0) {
         var o = offers[0];
         var name = escHtml(displayName(o, isLoggedIn));
-        var timeStr = o.ride_plan_time ? ' at ' + formatTime(o.ride_plan_time) : '';
+        var timeStr = o.ride_plan_time ? ' at ' + fmtTime(o.ride_plan_time) : '';
         var seats = o.original_message && o.original_message.match(/(\d)\s*seat/i);
         var seatStr = seats ? ' with ' + seats[1] + ' seats' : '';
         if (needs.length > 0) {
@@ -53,7 +65,7 @@ function personHtml(req, isLoggedIn) {
     var typeClass = isOffer ? 'offer' : 'need';
     var badge = isOffer ? '&#128663; Offering' : '&#9995; Looking';
     var name = escHtml(displayName(req, isLoggedIn));
-    var timeStr = req.ride_plan_time ? formatTime(req.ride_plan_time) : '&mdash;';
+    var timeStr = req.ride_plan_time ? fmtTime(req.ride_plan_time) : '&mdash;';
     var msg = escHtml(req.original_message || '');
     var group = escHtml(req.source_group_name || req.source_group || '');
     var sent = req.created_at ? formatMsgTime(req.created_at) : '';
