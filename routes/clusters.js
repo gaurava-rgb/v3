@@ -18,6 +18,11 @@ function isLeaving(cluster) {
     return o === 'college station' || o === 'cstat' || o === 'bryan' || o === 'cs';
 }
 
+function isArriving(cluster) {
+    var d = (cluster.destination || '').toLowerCase();
+    return d === 'college station' || d === 'cstat' || d === 'bryan' || d === 'cs';
+}
+
 // Format a ride_plan_time value. Passes HH:MM through formatTime(),
 // leaves fuzzy labels (e.g. "evening", "morning") as-is.
 function fmtTime(t) {
@@ -195,22 +200,28 @@ router.get('/clusters', optionalAuth, async function(req, res) {
             var dateLabel = formatDate(dateKey === 'flexible' ? null : dateKey);
             var isToday = dateKey === today;
 
-            // Split into leaving / arriving CS
+            // Split into leaving / arriving / other routes
             var leaving = [];
             var arriving = [];
+            var others = [];
             for (var dci = 0; dci < dateClusters.length; dci++) {
-                if (isLeaving(dateClusters[dci])) {
-                    leaving.push(dateClusters[dci]);
+                var cl = dateClusters[dci];
+                if (isLeaving(cl) && !isArriving(cl)) {
+                    leaving.push(cl);
+                } else if (isArriving(cl) && !isLeaving(cl)) {
+                    arriving.push(cl);
                 } else {
-                    arriving.push(dateClusters[dci]);
+                    others.push(cl);
                 }
             }
 
             var leavingCount = leaving.length;
             var arrivingCount = arriving.length;
+            var othersCount = others.length;
             var summaryParts = [];
             if (leavingCount > 0) summaryParts.push(leavingCount + ' leaving');
             if (arrivingCount > 0) summaryParts.push(arrivingCount + ' arriving');
+            if (othersCount > 0) summaryParts.push(othersCount + ' other');
 
             dateBlocksHtml += '<div class="date-block">';
             dateBlocksHtml += '<div class="date-label">' + escHtml(dateLabel) +
@@ -228,6 +239,13 @@ router.get('/clusters', optionalAuth, async function(req, res) {
                 dateBlocksHtml += '<div class="direction-label arriving">&#8595; Coming to College Station <span class="direction-count">(' + arrivingCount + ')</span></div>';
                 for (var ari = 0; ari < arriving.length; ari++) {
                     dateBlocksHtml += clusterHtml(arriving[ari], 'arriving', isLoggedIn);
+                }
+            }
+
+            if (others.length > 0) {
+                dateBlocksHtml += '<div class="direction-label others">&#8646; Other Routes <span class="direction-count">(' + othersCount + ')</span></div>';
+                for (var oi = 0; oi < others.length; oi++) {
+                    dateBlocksHtml += clusterHtml(others[oi], 'other', isLoggedIn);
                 }
             }
 
@@ -309,7 +327,7 @@ var CSS = [
 '  --wa-green: #25D366; --radius: 12px; --radius-sm: 8px;',
 '}',
 '* { margin: 0; padding: 0; box-sizing: border-box; }',
-'html, body { overflow-x: hidden; }',
+'html, body { overflow-x: clip; }',
 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.4; -webkit-font-smoothing: antialiased; }',
 '.container { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }',
 '.hero { text-align: center; margin-bottom: 14px; }',
@@ -370,11 +388,13 @@ var CSS = [
 '.direction-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; margin: 0 0 8px; display: flex; align-items: center; gap: 6px; position: sticky; top: var(--sticky-dir-top, 120px); z-index: 14; box-shadow: 0 2px 0 0 var(--bg); }',
 '.direction-label.leaving { color: #1d4ed8; background: #eff6ff; border-top: 1px solid #dbeafe; border-bottom: 1px solid #dbeafe; }',
 '.direction-label.arriving { color: #15803d; background: #f0fdf4; border-top: 1px solid #dcfce7; border-bottom: 1px solid #dcfce7; }',
+'.direction-label.others { color: #92400e; background: #fffbeb; border-top: 1px solid #fde68a; border-bottom: 1px solid #fde68a; }',
 '.direction-count { font-weight: 400; opacity: 0.7; }',
 '.cluster { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; margin-bottom: 10px; transition: box-shadow 0.15s; }',
 '.cluster:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }',
 '.cluster.leaving { border-left: 3px solid var(--blue); }',
 '.cluster.arriving { border-left: 3px solid var(--green); }',
+'.cluster.other { border-left: 3px solid #f59e0b; }',
 '.cluster-head { display: flex; align-items: center; padding: 12px 14px; cursor: pointer; user-select: none; gap: 12px; background: #fafaf8; border-bottom: 1px solid var(--border); }',
 '.cluster-head:active { background: #f0f0ee; }',
 '.cluster-info { flex: 1; min-width: 0; }',
@@ -451,17 +471,19 @@ var JS = [
 '    label.style.display = visibleCount > 0 ? "" : "none";',
 '  });',
 '  document.querySelectorAll(".date-block").forEach(function(block) {',
-'    var visLeav = 0, visArr = 0;',
+'    var visLeav = 0, visArr = 0, visOth = 0;',
 '    block.querySelectorAll(".cluster").forEach(function(c) {',
 '      if (c.style.display === "none") return;',
 '      if (c.classList.contains("leaving")) visLeav++;',
 '      else if (c.classList.contains("arriving")) visArr++;',
+'      else if (c.classList.contains("other")) visOth++;',
 '    });',
 '    var summary = block.querySelector(".date-summary");',
 '    if (summary) {',
 '      var parts = [];',
 '      if (visLeav > 0) parts.push(visLeav + " leaving");',
 '      if (visArr > 0) parts.push(visArr + " arriving");',
+'      if (visOth > 0) parts.push(visOth + " other");',
 '      summary.textContent = parts.join(" \\u00b7 ");',
 '    }',
 '    var anyVisible = block.querySelector(".cluster:not([style*=\\"display: none\\"])");',
