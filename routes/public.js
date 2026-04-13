@@ -12,7 +12,8 @@ var { optionalAuth } = require('../middleware/auth');
 
 router.get('/', optionalAuth, async function(req, res) {
     try {
-        var today = new Date().toISOString().split('T')[0];
+        var _now = new Date();
+        var today = [_now.getFullYear(), String(_now.getMonth()+1).padStart(2,'0'), String(_now.getDate()).padStart(2,'0')].join('-');
         var cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
 
         var results = await Promise.all([
