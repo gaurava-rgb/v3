@@ -4,9 +4,11 @@
 
 var express = require('express');
 var router = express.Router();
-var { authClient, setAuthCookies, clearAuthCookies, optionalAuth } = require('../middleware/auth');
+var { authClient, setAuthCookies, clearAuthCookies, setPhoneSessionCookie, clearPhoneSessionCookie, optionalAuth } = require('../middleware/auth');
 var { writeClient } = require('../lib/supabase');
 var { renderLoginPage, renderVerifyPage } = require('../lib/views');
+var { sendOtp, verifyOtp } = require('../lib/wa-otp');
+var { upsertProfile } = require('../lib/profiles');
 
 router.get('/login', function(req, res) {
     var prefill = req.query.email || '';
@@ -102,7 +104,56 @@ router.post('/verify', async function(req, res) {
 
 router.get('/logout', function(req, res) {
     clearAuthCookies(res);
+    clearPhoneSessionCookie(res);
     res.redirect('/');
+});
+
+// ── WhatsApp phone OTP ────────────────────────────────────────────────────────
+
+router.get('/login/phone', function(req, res) {
+    var prefill = req.query.phone || '';
+    res.send(renderPhoneLoginPage('', prefill));
+});
+
+router.post('/login/phone', async function(req, res) {
+    var raw = (req.body.phone || '').trim();
+    var digits = raw.replace(/\D/g, '');
+    if (digits.length === 10) digits = '1' + digits;
+
+    if (!digits || digits.length < 11) {
+        return res.send(renderPhoneLoginPage('Please enter a valid US phone number.', raw));
+    }
+
+    var result = await sendOtp(digits);
+    if (!result.ok) {
+        return res.send(renderPhoneLoginPage(result.error, raw));
+    }
+
+    res.redirect('/verify/phone?phone=' + encodeURIComponent(digits));
+});
+
+router.get('/verify/phone', function(req, res) {
+    var phone = (req.query.phone || '').trim();
+    if (!phone) return res.redirect('/login/phone');
+    res.send(renderPhoneVerifyPage(phone, ''));
+});
+
+router.post('/verify/phone', async function(req, res) {
+    var phone = (req.body.phone || '').trim();
+    var code  = (req.body.code  || '').trim();
+
+    if (!phone) return res.redirect('/login/phone');
+
+    var result = await verifyOtp(phone, code);
+    if (!result.ok) {
+        return res.send(renderPhoneVerifyPage(phone, result.error));
+    }
+
+    setPhoneSessionCookie(res, phone);
+    // Create/update profile (non-blocking — don't fail auth if this errors)
+    upsertProfile(phone).catch(err => console.error('[Auth] upsertProfile error:', err.message));
+    var dest = req.body.next || req.query.next || '/';
+    res.redirect(dest);
 });
 
 router.post('/log-click', optionalAuth, async function(req, res) {

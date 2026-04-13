@@ -1,10 +1,16 @@
 /**
  * Authentication middleware for dashboard routes.
+ * Supports two session types:
+ *   1. Supabase email OTP  → access_token + refresh_token cookies (existing)
+ *   2. WhatsApp phone OTP  → wa_phone cookie (HMAC-signed, stateless)
  */
 
+var crypto = require('crypto');
 var { authClient } = require('../lib/supabase');
 
-var DIGEST_KEY = process.env.DIGEST_KEY || '';
+var DIGEST_KEY  = process.env.DIGEST_KEY || '';
+var WA_OTP_SECRET = process.env.WA_OTP_SECRET || 'change-me-in-production';
+var PHONE_SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 var COOKIE_OPTS = {
     httpOnly: true,
@@ -12,6 +18,42 @@ var COOKIE_OPTS = {
     sameSite: 'lax',
     path: '/'
 };
+
+// ── Phone session (stateless HMAC cookie) ────────────────────────────────────
+
+function signPhoneSession(phone) {
+    var payload = Buffer.from(JSON.stringify({
+        phone,
+        exp: Date.now() + PHONE_SESSION_TTL
+    })).toString('base64url');
+    var sig = crypto.createHmac('sha256', WA_OTP_SECRET).update(payload).digest('base64url');
+    return payload + '.' + sig;
+}
+
+function parsePhoneSession(token) {
+    if (!token || typeof token !== 'string') return null;
+    var dot = token.lastIndexOf('.');
+    if (dot < 1) return null;
+    var payload = token.slice(0, dot);
+    var sig     = token.slice(dot + 1);
+    var expected = crypto.createHmac('sha256', WA_OTP_SECRET).update(payload).digest('base64url');
+    // Constant-time compare
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+    try {
+        var data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+        if (!data.phone || !data.exp || Date.now() > data.exp) return null;
+        return data;
+    } catch { return null; }
+}
+
+function setPhoneSessionCookie(res, phone) {
+    res.cookie('wa_phone', signPhoneSession(phone),
+        Object.assign({}, COOKIE_OPTS, { maxAge: PHONE_SESSION_TTL }));
+}
+
+function clearPhoneSessionCookie(res) {
+    res.clearCookie('wa_phone', { path: '/' });
+}
 
 function setAuthCookies(res, accessToken, refreshToken) {
     res.cookie('access_token', accessToken,
@@ -27,6 +69,18 @@ function clearAuthCookies(res) {
 
 async function optionalAuth(req, res, next) {
     req.user = null;
+
+    // Check WhatsApp phone session first (stateless, no network call)
+    var phoneToken = req.cookies.wa_phone;
+    if (phoneToken) {
+        var phoneData = parsePhoneSession(phoneToken);
+        if (phoneData) {
+            req.user = { phone: phoneData.phone, id: phoneData.phone, auth_type: 'phone' };
+            return next();
+        }
+        clearPhoneSessionCookie(res); // clear invalid/expired cookie
+    }
+
     var accessToken = req.cookies.access_token;
     var refreshToken = req.cookies.refresh_token;
 
@@ -81,6 +135,8 @@ module.exports = {
     DIGEST_KEY,
     setAuthCookies,
     clearAuthCookies,
+    setPhoneSessionCookie,
+    clearPhoneSessionCookie,
     optionalAuth,
     digestAuth
 };

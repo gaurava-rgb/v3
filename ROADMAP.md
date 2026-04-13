@@ -28,6 +28,10 @@ Future sprint files are written at the end of the preceding sprint (not pre-crea
 | 4 | Architecture | DONE | Split dashboard.js (36 lines), shared date filter, read-only Supabase client |
 | 5 | Lifecycle + dedup | PLANNED | Don't close requests on match, expiry TTL, soft dedup |
 | 6 | Observability | PLANNED | Parse false negative review, unmatched aging, match outcomes |
+| 7 | User profiles | DONE | WA OTP auth, user_profiles table, /profile page, name seeding from wa_contacts |
+| 8 | Profile editing | PLANNED | Edit display_name, email↔phone linking (greyed), rate-limited updates |
+| 9 | Housing board | PLANNED | v3_housing table, parser extension, /housing board, /listing/:slug |
+| 10 | Listing claim | PLANNED | Claim via OTP, edit form, image upload, bot DM on ingest |
 
 ---
 
@@ -50,3 +54,19 @@ Stop closing requests on match creation (biggest product win). Add request expir
 
 ### Sprint 6 — Observability
 Admin view for parse false negatives (isRequest=false review queue). Unmatched request aging buckets. Match outcome tracking (notified → accepted vs expired). Quality tier correlation with real outcomes.
+
+---
+
+## Housing + Auth Track (Sprints 7–10)
+
+### Sprint 7 — User Profiles — DONE (v3.7.0, 2026-04-13)
+WA OTP auth system (no SMS dependency). `user_profiles` table seeded from `wa_contacts`. `/profile` page showing name + masked phone + verified badge. `wa_phone` HMAC cookie alongside existing Supabase email sessions.
+
+### Sprint 8 — Profile Editing + Email Linking
+Edit display_name inline on `/profile`. Link email↔phone when both sessions present. Show email row greyed-out (read-only). Rate limit: 5 name changes/hour.
+
+### Sprint 9 — Housing Board
+Parser detects housing messages (sublease/roommate/lease-transfer). `v3_housing` table. Backfill 30 days from `v3_message_log`. `/housing` board with filter chips. `/listing/:slug` individual page with progressive disclosure (contact gated behind auth).
+
+### Sprint 10 — Listing Claim + Photos
+Claim a listing via phone OTP matched to `contact_phone`. Post-claim edit form. Image upload → Supabase Storage. Bot DM on housing ingest: "Your listing is live — claim it at ridesplit.app/listing/xyz".

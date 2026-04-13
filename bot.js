@@ -21,6 +21,7 @@ const qrcode = require('qrcode-terminal');
 
 const { parseMessage } = require('./parser');
 const {
+    supabase,
     saveRequest, logMessage, messageAlreadyProcessed,
     getStats, loadMonitoredGroups, getGroupUpdates, seedGroups,
     upsertContact, resolveContactPhone, loadAllContacts
@@ -546,6 +547,49 @@ setInterval(() => {
     if (processedMessages.size > 10000) processedMessages.clear();
     if (groupNameCache.size > 500) groupNameCache.clear();
 }, 60 * 60 * 1000);
+
+// ── outbound queue: WhatsApp OTP sender ───────────────────────────────────
+// Polls every 5s for pending wa_otp messages and sends them via the live socket.
+
+setInterval(async () => {
+    if (!isReady || !sock) return;
+
+    const { data: pending, error } = await supabase
+        .from('outbound_queue')
+        .select('id, contact, payload')
+        .eq('status', 'pending')
+        .eq('message_type', 'wa_otp')
+        .order('created_at', { ascending: true })
+        .limit(5);
+
+    if (error) {
+        console.error('[Bot] OTP queue poll error:', error.message);
+        return;
+    }
+    if (!pending || pending.length === 0) return;
+
+    for (const row of pending) {
+        const digits  = (row.contact || '').replace(/\D/g, '');
+        const message = row.payload?.message;
+        if (!digits || !message) continue;
+
+        const jid = digits + '@s.whatsapp.net';
+        try {
+            await sock.sendMessage(jid, { text: message });
+            await supabase
+                .from('outbound_queue')
+                .update({ status: 'sent', sent_at: new Date().toISOString() })
+                .eq('id', row.id);
+            console.log(`[Bot] OTP sent to ${digits}`);
+        } catch (err) {
+            console.error(`[Bot] OTP send failed for ${digits}:`, err.message);
+            await supabase
+                .from('outbound_queue')
+                .update({ status: 'failed' })
+                .eq('id', row.id);
+        }
+    }
+}, 5000);
 
 // ── signals ────────────────────────────────────────────────────────────────
 
