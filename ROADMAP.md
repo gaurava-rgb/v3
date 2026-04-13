@@ -29,7 +29,7 @@ Future sprint files are written at the end of the preceding sprint (not pre-crea
 | 5 | Lifecycle + dedup | PLANNED | Don't close requests on match, expiry TTL, soft dedup |
 | 6 | Observability | PLANNED | Parse false negative review, unmatched aging, match outcomes |
 | 7 | User profiles | DONE | WA OTP auth, user_profiles table, /profile page, name seeding from wa_contacts |
-| 8 | Profile editing | PLANNED | Edit display_name, email↔phone linking (greyed), rate-limited updates |
+| 8 | Profile editing | DONE | Edit display_name inline, email↔phone linking on both verify routes, three-state email field |
 | 9 | Housing board | PLANNED | v3_housing table, parser extension, /housing board, /listing/:slug |
 | 10 | Listing claim | PLANNED | Claim via OTP, edit form, image upload, bot DM on ingest |
 
@@ -62,8 +62,8 @@ Admin view for parse false negatives (isRequest=false review queue). Unmatched r
 ### Sprint 7 — User Profiles — DONE (v3.7.0, 2026-04-13)
 WA OTP auth system (no SMS dependency). `user_profiles` table seeded from `wa_contacts`. `/profile` page showing name + masked phone + verified badge. `wa_phone` HMAC cookie alongside existing Supabase email sessions.
 
-### Sprint 8 — Profile Editing + Email Linking
-Edit display_name inline on `/profile`. Link email↔phone when both sessions present. Show email row greyed-out (read-only). Rate limit: 5 name changes/hour.
+### Sprint 8 — Profile Editing + Email Linking — DONE (v3.8.0, 2026-04-13)
+Inline name editing on `/profile` (pencil icon, no reload, Enter/Escape shortcuts). Three-state email field (not linked / ✓ Verified email-auth / ✓ Linked phone+email). Phone↔email linking triggered on both verify routes when both sessions coexist. `parsePhoneSession` exported from middleware/auth.js. `nameLimiter` (10/hr) in rateLimiter.js. Fixed missing `renderPhoneLoginPage`/`renderPhoneVerifyPage` import in routes/auth.js.
 
 ### Sprint 9 — Housing Board
 Parser detects housing messages (sublease/roommate/lease-transfer). `v3_housing` table. Backfill 30 days from `v3_message_log`. `/housing` board with filter chips. `/listing/:slug` individual page with progressive disclosure (contact gated behind auth).

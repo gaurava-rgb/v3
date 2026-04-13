@@ -4,11 +4,11 @@
 
 var express = require('express');
 var router = express.Router();
-var { authClient, setAuthCookies, clearAuthCookies, setPhoneSessionCookie, clearPhoneSessionCookie, optionalAuth } = require('../middleware/auth');
+var { authClient, setAuthCookies, clearAuthCookies, setPhoneSessionCookie, clearPhoneSessionCookie, parsePhoneSession, optionalAuth } = require('../middleware/auth');
 var { writeClient } = require('../lib/supabase');
-var { renderLoginPage, renderVerifyPage } = require('../lib/views');
+var { renderLoginPage, renderVerifyPage, renderPhoneLoginPage, renderPhoneVerifyPage } = require('../lib/views');
 var { sendOtp, verifyOtp } = require('../lib/wa-otp');
-var { upsertProfile } = require('../lib/profiles');
+var { upsertProfile, linkEmailToProfile } = require('../lib/profiles');
 
 router.get('/login', function(req, res) {
     var prefill = req.query.email || '';
@@ -95,6 +95,17 @@ router.post('/verify', async function(req, res) {
         }
 
         setAuthCookies(res, result.data.session.access_token, result.data.session.refresh_token);
+
+        // If user also has an active phone session, link the email to their phone profile
+        var phoneToken = req.cookies.wa_phone;
+        if (phoneToken) {
+            var phoneData = parsePhoneSession(phoneToken);
+            if (phoneData && phoneData.phone) {
+                linkEmailToProfile(phoneData.phone, email)
+                    .catch(err => console.error('[Auth] linkEmailToProfile error:', err.message));
+            }
+        }
+
         res.redirect('/');
     } catch (err) {
         console.error('[Auth] OTP verify exception:', err.message);
@@ -152,6 +163,18 @@ router.post('/verify/phone', async function(req, res) {
     setPhoneSessionCookie(res, phone);
     // Create/update profile (non-blocking — don't fail auth if this errors)
     upsertProfile(phone).catch(err => console.error('[Auth] upsertProfile error:', err.message));
+
+    // If user also has an active email session, link the email to this phone's profile
+    var accessToken = req.cookies.access_token;
+    if (accessToken) {
+        authClient.auth.getUser(accessToken).then(function(result) {
+            var email = result.data && result.data.user && result.data.user.email;
+            if (email) {
+                return linkEmailToProfile(phone, email);
+            }
+        }).catch(err => console.error('[Auth] linkEmailToProfile (phone verify) error:', err.message));
+    }
+
     var dest = req.body.next || req.query.next || '/';
     res.redirect(dest);
 });

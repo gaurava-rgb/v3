@@ -1,6 +1,6 @@
 # Sprint 8 — Profile Editing + Email Linking
 
-**Status:** PLANNED  
+**Status:** DONE  
 **Picks up from:** Sprint 7 (v3.7.0, committed 2026-04-13)  
 **Target tag:** v3.8.0
 

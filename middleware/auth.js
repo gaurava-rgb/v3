@@ -133,6 +133,7 @@ function digestAuth(req, res) {
 module.exports = {
     authClient,
     DIGEST_KEY,
+    parsePhoneSession,
     setAuthCookies,
     clearAuthCookies,
     setPhoneSessionCookie,
