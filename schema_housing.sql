@@ -20,5 +20,15 @@ CREATE TABLE IF NOT EXISTS v3_housing (
     active        BOOLEAN DEFAULT TRUE,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     updated_at    TIMESTAMPTZ DEFAULT NOW(),
-    message_hash  TEXT UNIQUE
+    message_hash  TEXT UNIQUE,
+    poster_phone  TEXT                         -- cached from wa_contacts; avoids second query on detail page
 );
+
+-- Index for fast slug lookups (detail page)
+CREATE INDEX IF NOT EXISTS idx_v3_housing_slug ON v3_housing(slug);
+
+-- Index for wa_contacts lid lookups (poster phone resolution)
+CREATE INDEX IF NOT EXISTS idx_wa_contacts_lid ON wa_contacts(lid);
+
+-- Migration: add poster_phone column if table already exists
+ALTER TABLE v3_housing ADD COLUMN IF NOT EXISTS poster_phone TEXT;
