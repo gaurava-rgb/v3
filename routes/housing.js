@@ -9,7 +9,7 @@ var { isEmailWaVerified } = require('../lib/profiles');
 
 router.get('/housing', optionalAuth, async function(req, res) {
     try {
-        var listings = await getActiveListings({ listing_type: req.query.type || null });
+        var listings = await getActiveListings({ listing_type: null }); // always fetch all
         var isLoggedIn = !!req.user;
         var html = renderHousingBoard(listings, req.query.type || 'all', isLoggedIn);
         res.setHeader('Content-Type', 'text/html');
