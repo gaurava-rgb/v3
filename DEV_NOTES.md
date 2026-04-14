@@ -48,6 +48,54 @@ See `ROADMAP.md` for full sprint plan. Sprint assignments shown below.
 
 ---
 
+## Housing Detail Page — 830ms TTFB Lag (Fixed Apr 14 2026)
+
+### Symptom
+Clicking a listing card on `/housing` had a noticeable ~1.5s delay before the page opened. Measured via Playwright + Chrome Performance API: **TTFB 830ms**, all of it at the origin server (`cfOrigin: 803ms`).
+
+### Root Cause
+`getListingBySlug()` in `lib/housing.js` was making **two sequential Supabase queries** on every page load:
+
+1. `SELECT * FROM v3_housing WHERE slug = $1` — fetch the listing row
+2. `SELECT phone FROM wa_contacts WHERE lid = $1` — resolve the poster's real phone number
+
+The VPS (Hetzner, Germany) → Supabase round trip is ~400ms. Two sequential queries = ~800ms before any HTML was sent.
+
+There was also no index on `v3_housing.slug`, so query 1 was doing a full table scan.
+
+### Fix (3 layers)
+
+**1. Indexes** (already applied in Supabase SQL editor Apr 14 2026)
+```sql
+CREATE INDEX IF NOT EXISTS idx_v3_housing_slug ON v3_housing(slug);
+CREATE INDEX IF NOT EXISTS idx_wa_contacts_lid ON wa_contacts(lid);
+ALTER TABLE v3_housing ADD COLUMN IF NOT EXISTS poster_phone TEXT;
+```
+
+**2. Eliminate the second query after first visit**
+`getListingBySlug` now skips the `wa_contacts` lookup if `poster_phone` is already cached in the housing row. On the first load it still does both queries, but writes the resolved phone back into `v3_housing.poster_phone` (fire-and-forget). Every subsequent page load is one query.
+
+**3. In-memory cache**
+Added a `Map`-based cache in `lib/housing.js`:
+- Listing detail (`slugCache`): 5-minute TTL per slug
+- Board listings (`boardCache`): 60-second TTL per filter key
+
+After the cache is warm, TTFB drops to ~184ms (from 830ms). Board page dropped from ~3.7s to ~2.0s cold, sub-100ms warm.
+
+### Results
+| Scenario | TTFB | Total nav |
+|---|---|---|
+| Before | 830ms | ~1500ms |
+| After — cold (first visit) | 480ms | ~1100ms |
+| After — warm (cache hit) | 184ms | ~815ms |
+
+### What to watch
+- Cache is process-scoped (`aggie-v3-dash`). A `pm2 restart` clears it — first visit after restart will be cold.
+- `poster_phone` backfill only happens on page view, not in batch. Listings never previously opened will still do 2 queries on first load.
+- Board cache is 60s — new listings from the bot may take up to 60s to appear.
+
+---
+
 ## Staging Environment
 
 ### Goal
