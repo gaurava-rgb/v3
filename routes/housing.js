@@ -38,6 +38,8 @@ router.get('/listing/:slug', optionalAuth, async function(req, res) {
             }
         }
 
+        console.log('[Housing Detail] isLoggedIn:', isLoggedIn, 'isWaVerified:', isWaVerified, 'auth_type:', req.user?.auth_type, 'email:', req.user?.email);
+
         var html = renderListingPage(listing, isLoggedIn, isWaVerified);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
