@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS v3_housing (
     active        BOOLEAN DEFAULT TRUE,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     updated_at    TIMESTAMPTZ DEFAULT NOW(),
+    sent_at       TIMESTAMPTZ,                 -- original WhatsApp message timestamp (for freshness calculation)
     message_hash  TEXT UNIQUE,
     poster_phone  TEXT                         -- cached from wa_contacts; avoids second query on detail page
 );
@@ -32,3 +33,6 @@ CREATE INDEX IF NOT EXISTS idx_wa_contacts_lid ON wa_contacts(lid);
 
 -- Migration: add poster_phone column if table already exists
 ALTER TABLE v3_housing ADD COLUMN IF NOT EXISTS poster_phone TEXT;
+
+-- Migration: add sent_at column for accurate freshness calculation
+ALTER TABLE v3_housing ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;

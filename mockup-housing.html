@@ -3,404 +3,376 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Housing Board — RideSplit (Mockup)</title>
+<title>Housing — RideSplit</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         background: #fafafa; color: #1a1a1a; min-height: 100vh; }
+:root {
+  --maroon: #500000; --maroon-light: #6b0000; --bg: #fafafa; --card: #fff;
+  --border: #e5e5e5; --text: #1a1a1a; --text-secondary: #666; --text-muted: #999;
+  --blue: #3b82f6; --blue-bg: #eff6ff; --green: #22c55e; --green-bg: #f0fdf4;
+  --wa-green: #25D366; --radius: 12px; --radius-sm: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.4; -webkit-font-smoothing: antialiased; }
 
-  /* ── Nav ── */
-  .nav { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 0 20px;
-         display: flex; align-items: center; gap: 20px; height: 52px; position: sticky; top: 0; z-index: 10; }
-  .nav-logo { font-size: 16px; font-weight: 700; color: #500000; text-decoration: none;
-              letter-spacing: -0.3px; margin-right: 8px; }
-  .nav-link { font-size: 14px; color: #444; text-decoration: none; }
-  .nav-link:hover { color: #500000; }
-  .nav-link.current { font-weight: 700; color: #500000; }
-  .nav-right { margin-left: auto; font-size: 13px; }
-  .nav-right a { color: #500000; text-decoration: none; font-weight: 500; }
-  .nav-right a:hover { text-decoration: underline; }
+.container { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
 
-  /* ── Page shell ── */
-  .page { max-width: 960px; margin: 0 auto; padding: 32px 20px 60px; }
+/* ── Hero ── */
+.hero { text-align: center; margin-bottom: 14px; }
+.hero h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+.hero .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.hero .subtitle strong { color: var(--text); }
+.hero .tagline { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.auth-link { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.auth-link a { color: var(--maroon); text-decoration: none; font-weight: 600; }
+.auth-link a:hover { text-decoration: underline; }
 
-  /* ── Board header ── */
-  .board-header { margin-bottom: 24px; }
-  .board-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
-  .board-subhead {
-    font-size: 14px; color: #555; display: flex; align-items: center; gap: 6px;
-  }
-  .board-subhead .wa-dot {
-    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-    background: #25d366; flex-shrink: 0;
-  }
+/* ── Auth banner ── */
+.auth-banner { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 12px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; line-height: 1.45; }
+.auth-banner a { color: var(--maroon); font-weight: 700; text-decoration: none; }
+.auth-banner a:hover { text-decoration: underline; }
+.auth-banner-close { margin-left: auto; background: none; border: none; font-size: 20px; cursor: pointer; color: #92400e; line-height: 1; padding: 0 4px; flex-shrink: 0; }
 
-  /* ── Filters ── */
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
-  .chip { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 13px;
-          font-weight: 500; text-decoration: none; cursor: pointer;
-          transition: background 0.15s, color 0.15s, border-color 0.15s; border: none; }
-  .chip-active { background: #500000; color: #fff; border: 1.5px solid #500000; }
-  .chip-inactive { background: #fff; color: #444; border: 1.5px solid #e8e8e8; }
-  .chip-inactive:hover { border-color: #500000; color: #500000; }
+/* ── Filter bar ── */
+.filter-bar { position: sticky; top: 0; z-index: 18; background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.filter-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); flex-shrink: 0; min-width: 34px; }
+.filter-pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); cursor: pointer; user-select: none; transition: all 0.15s ease; -webkit-tap-highlight-color: transparent; }
+.filter-pill:active { transform: scale(0.96); }
+.filter-pill.active { background: var(--maroon); color: #fff; border-color: var(--maroon); }
 
-  /* ── Listing grid ── */
-  .listing-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  @media (max-width: 600px) { .listing-grid { grid-template-columns: 1fr; } }
+/* ── Posted-at subscript ── */
+.posted-at { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
-  .card-link { text-decoration: none; color: inherit; display: block; cursor: pointer; }
-  .listing-card {
-    background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;
-    padding: 18px 20px; transition: box-shadow 0.15s, transform 0.15s;
-    position: relative;
-  }
-  .listing-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); transform: translateY(-2px); }
+/* ── Section labels ── */
+.section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; margin: 0 0 8px; display: flex; align-items: center; gap: 6px; position: sticky; top: 75px; z-index: 14; box-shadow: 0 2px 0 0 var(--bg); }
+.section-label.sublease { color: #7a0000; background: #fef2f2; border-top: 1px solid #fecaca; border-bottom: 1px solid #fecaca; }
+.section-label.roommate { color: #15803d; background: var(--green-bg); border-top: 1px solid #dcfce7; border-bottom: 1px solid #dcfce7; }
+.section-label.lease    { color: #1d4ed8; background: var(--blue-bg);  border-top: 1px solid #dbeafe; border-bottom: 1px solid #dbeafe; }
+.section-count { font-weight: 400; opacity: 0.7; }
 
-  /* Freshness dot */
-  .freshness {
-    position: absolute; top: 16px; right: 16px;
-    display: flex; align-items: center; gap: 4px;
-    font-size: 11px; color: #888;
-  }
-  .fresh-dot {
-    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-  }
-  .fresh-dot.green { background: #22c55e; }
-  .fresh-dot.yellow { background: #f59e0b; }
-  .fresh-dot.gray { background: #d1d5db; }
+/* ── Listing card (mirrors .cluster) ── */
+.listing { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; margin-bottom: 10px; transition: box-shadow 0.15s; }
+.listing:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.listing.sublease { border-left: 3px solid #f87171; }
+.listing.roommate { border-left: 3px solid var(--green); }
+.listing.lease    { border-left: 3px solid var(--blue); }
 
-  .listing-badge {
-    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
-    border-radius: 6px; padding: 2px 8px; margin-bottom: 10px;
-  }
-  .listing-location { font-size: 16px; font-weight: 700; margin-bottom: 6px; padding-right: 60px; }
-  .listing-price { font-size: 15px; color: #500000; font-weight: 600; margin-bottom: 4px; }
-  .listing-beds { font-size: 13px; color: #555; margin-bottom: 4px; }
-  .listing-avail { font-size: 13px; color: #555; margin-bottom: 8px; }
-  .listing-footer {
-    display: flex; align-items: center; justify-content: space-between;
-    border-top: 1px solid #f0f0f0; padding-top: 10px; margin-top: 2px;
-  }
-  .listing-sender { font-size: 12px; color: #999; }
-  .listing-source {
-    font-size: 11px; color: #25d366; font-weight: 600;
-    display: flex; align-items: center; gap: 3px;
-  }
-  .listing-source svg { flex-shrink: 0; }
+/* Card head — always visible */
+.listing-head { display: flex; align-items: center; padding: 12px 14px; cursor: pointer; user-select: none; gap: 12px; background: #fafaf8; border-bottom: 1px solid var(--border); }
+.listing-head:active { background: #f0f0ee; }
+.listing-info { flex: 1; min-width: 0; }
+.listing-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.listing-name small { font-weight: 400; color: var(--text-muted); font-size: 13px; margin-left: 4px; }
+.listing-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 3px; }
+.pill { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+.pill-sub   { background: #fee2e2; color: #7a0000; }
+.pill-room  { background: #dcfce7; color: #15803d; }
+.pill-lease { background: #dbeafe; color: #1d4ed8; }
+.pill-price { background: #f5f5f5; color: var(--text-secondary); }
+.pill-fresh { background: #dcfce7; color: #15803d; }
+.pill-stale { background: #f5f5f5; color: var(--text-muted); }
+.listing-summary { font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 1.35; }
+.expand-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.listing.open .expand-hint { display: none; }
+.listing-chevron { font-size: 18px; color: #888; flex-shrink: 0; transition: transform 0.2s ease; width: 24px; text-align: center; }
+.listing.open .listing-chevron { transform: rotate(90deg); }
 
-  /* ── Detail page ── */
-  #detail-view { display: none; }
-  #board-view  { display: block; }
+/* Card body — collapsed by default */
+.listing-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; border-top: 0 solid var(--border); }
+.listing.open .listing-body { max-height: 1000px; border-top-width: 1px; }
+.listing-body-inner { }
 
-  .back-link {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 13px; color: #500000; text-decoration: none;
-    margin-bottom: 20px; cursor: pointer;
-  }
-  .back-link:hover { text-decoration: underline; }
-  .detail-badge {
-    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
-    border-radius: 6px; padding: 3px 10px; margin-bottom: 14px;
-  }
-  .detail-title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
-  .detail-meta {
-    font-size: 13px; color: #888; margin-bottom: 24px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .detail-meta .wa-pill {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: #f0fdf4; color: #166534; font-size: 12px; font-weight: 600;
-    border-radius: 20px; padding: 2px 8px;
-  }
+/* Detail rows inside card body */
+.detail-row { padding: 9px 14px; border-bottom: 1px solid #f0f0f0; font-size: 13px; display: flex; align-items: baseline; gap: 10px; }
+.detail-row:last-child { border-bottom: 0; }
+.dr-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); flex-shrink: 0; width: 72px; }
+.dr-val { color: var(--text); }
 
-  .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;
-          padding: 24px; margin-bottom: 16px; }
-  .section { margin-bottom: 20px; }
-  .section:last-child { margin-bottom: 0; }
-  .section-heading {
-    font-size: 12px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.5px; color: #888; margin-bottom: 10px;
-  }
-  .detail-table { width: 100%; border-collapse: collapse; }
-  .dl-label { font-size: 13px; color: #888; padding: 6px 12px 6px 0; width: 120px;
-              vertical-align: top; white-space: nowrap; }
-  .dl-val { font-size: 14px; color: #1a1a1a; padding: 6px 0; }
-  .amenities { display: flex; flex-wrap: wrap; gap: 6px; }
-  .amenity-pill {
-    background: #f0f0f0; color: #444; font-size: 12px; font-weight: 500;
-    border-radius: 20px; padding: 3px 10px;
-  }
+/* Amenity pills */
+.amenities-row { padding: 9px 14px 10px; border-bottom: 1px solid #f0f0f0; display: flex; flex-wrap: wrap; gap: 5px; }
+.amenity { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; background: #f3f3f3; color: var(--text-secondary); border: 1px solid var(--border); }
 
-  /* ── Auth gate (improved) ── */
-  .auth-gate {
-    background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 28px 24px;
-  }
-  .auth-gate-icon { font-size: 32px; margin-bottom: 12px; }
-  .auth-gate-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-  .auth-gate-body { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 6px; }
-  .auth-gate-trust {
-    display: flex; align-items: flex-start; gap: 8px;
-    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
-    padding: 10px 14px; margin: 16px 0 20px; font-size: 13px; color: #166534; line-height: 1.5;
-  }
-  .auth-gate-trust .check { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
-  .auth-gate-actions { display: flex; flex-direction: column; gap: 10px; }
-  .btn-primary {
-    display: inline-block; padding: 11px 24px; background: #500000; color: #fff;
-    border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none;
-    text-align: center; cursor: pointer; border: none;
-  }
-  .btn-primary:hover { background: #6b0000; }
-  .btn-secondary {
-    display: inline-block; padding: 11px 24px; background: #fff; color: #444;
-    border-radius: 8px; font-size: 14px; font-weight: 500; text-decoration: none;
-    text-align: center; cursor: pointer; border: 1.5px solid #e8e8e8;
-  }
-  .btn-secondary:hover { border-color: #aaa; }
-  .auth-gate-skip { font-size: 12px; color: #aaa; margin-top: 8px; text-align: center; }
+/* Snippet */
+.snippet-row { padding: 9px 14px 10px; border-bottom: 1px solid #f0f0f0; font-size: 12px; color: var(--text-secondary); font-style: italic; line-height: 1.45; }
+
+/* Auth gate inside card */
+.card-auth { padding: 14px; background: #fef3c7; border-bottom: 1px solid #fde68a; }
+.card-auth-title { font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 4px; }
+.card-auth-body { font-size: 12px; color: #92400e; margin-bottom: 10px; line-height: 1.4; }
+.card-auth-actions { display: flex; flex-direction: column; gap: 7px; }
+.btn { display: block; width: 100%; padding: 9px 16px; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
+.btn-primary { background: var(--maroon); color: #fff; }
+.btn-primary:hover { background: var(--maroon-light); }
+.btn-secondary { background: var(--card); color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: #aaa; }
+
+/* Footer */
+.footer { text-align: center; padding: 16px 0; font-size: 11px; color: #ccc; border-top: 1px solid #eee; margin-top: 20px; }
+
+@media (max-width: 700px) {
+  .container { padding: 8px 8px 32px; }
+  .hero h1 { font-size: 18px; }
+  .hero .tagline { display: none; }
+  .hero { margin-bottom: 8px; }
+  .listing-head { padding: 10px 12px; gap: 8px; }
+  .listing-name { font-size: 14px; }
+  .detail-row { padding: 8px 12px; }
+  .amenities-row { padding: 8px 12px 10px; }
+  .snippet-row { padding: 8px 12px 10px; }
+  .card-auth { padding: 12px; }
+}
 </style>
 </head>
 <body>
+<div class="container">
 
-<nav class="nav">
-  <a class="nav-logo" href="#">RideSplit</a>
-  <a class="nav-link current" href="#">Housing</a>
-  <a class="nav-link" href="#">Rides</a>
-  <div class="nav-right"><a href="#">Sign in</a></div>
-</nav>
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Aggie Housing</h1>
+    <p class="subtitle">Tracking <strong>162 listings</strong> from <strong>8 WhatsApp groups</strong> this week</p>
+    <p class="tagline">Find subleases, roommates, and lease transfers. Updated in real time.</p>
+    <div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see poster contact info</div>
+  </div>
 
-<!-- ══════════════════════════════════════════
-     BOARD VIEW
-══════════════════════════════════════════ -->
-<div id="board-view">
-<div class="page">
+  <!-- Auth banner -->
+  <div class="auth-banner" id="auth-banner">
+    <span>&#128274; Contact info is hidden. <a href="/login">Sign in with your @tamu.edu email</a> to see it.</span>
+    <button class="auth-banner-close" onclick="document.getElementById('auth-banner').style.display='none'" aria-label="Dismiss">&times;</button>
+  </div>
 
-  <div class="board-header">
-    <h1>Housing Board</h1>
-    <div class="board-subhead">
-      <span class="wa-dot"></span>
-      Listings from TAMU student WhatsApp groups &middot; Updated daily
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="filter-row">
+      <span class="filter-label">Type</span>
+      <span class="filter-pill type-pill active" onclick="toggleType(this,'all')">All</span>
+      <span class="filter-pill type-pill" onclick="toggleType(this,'sublease')">Sublease</span>
+      <span class="filter-pill type-pill" onclick="toggleType(this,'roommate')">Roommate</span>
+      <span class="filter-pill type-pill" onclick="toggleType(this,'lease')">Lease Transfer</span>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">City</span>
+      <span class="filter-pill city-pill" onclick="toggleCity(this,'bryan')">Bryan</span>
+      <span class="filter-pill city-pill" onclick="toggleCity(this,'college-station')">College Station</span>
     </div>
   </div>
 
-  <div class="filters">
-    <button class="chip chip-active" onclick="filterChips(this)">All</button>
-    <button class="chip chip-inactive" onclick="filterChips(this)">Sublease</button>
-    <button class="chip chip-inactive" onclick="filterChips(this)">Roommate</button>
-    <button class="chip chip-inactive" onclick="filterChips(this)">Lease Transfer</button>
-  </div>
+  <!-- ── SUBLEASE ── -->
+  <div class="section-label sublease">&#127968; Subleases <span class="section-count">(94)</span></div>
 
-  <div class="listing-grid">
-
-    <!-- Card 1 — very fresh -->
-    <div class="card-link" onclick="showDetail('sublease')">
-      <div class="listing-card">
-        <div class="freshness">
-          <span class="fresh-dot green"></span>
-          <span>today</span>
+  <!-- Card 1: The Stack -->
+  <article class="listing sublease" data-city="bryan" tabindex="0" role="button" aria-expanded="false">
+    <div class="listing-head" onclick="toggleListing(this.parentElement)">
+      <div class="listing-info">
+        <div class="listing-name">The Stack — 2BR/2BA <small>Bryan, TX</small></div>
+        <div class="listing-meta">
+          <span class="pill pill-sub">Sublease</span>
+          <span class="pill pill-price">$750/mo</span>
+          <span class="pill pill-fresh">today</span>
         </div>
-        <div class="listing-badge" style="color:#fff;background:#500000;">SUBLEASE</div>
-        <div class="listing-location">The Stack — 2BR/2BA</div>
-        <div class="listing-price">$750/mo</div>
-        <div class="listing-beds">2bd / 2bath</div>
-        <div class="listing-avail">Available: May 15, 2026</div>
-        <div class="listing-footer">
-          <span class="listing-sender">posted by Priya S.</span>
-          <span class="listing-source">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-            from WA group
-          </span>
+        <div class="listing-summary">Priya S. &middot; May 15 &ndash; Aug 15, 2026 &middot; In-unit W/D, Pool</div>
+        <div class="expand-hint">Tap to see details</div>
+      </div>
+      <span class="listing-chevron">&#9656;</span>
+    </div>
+    <div class="listing-body">
+      <div class="listing-body-inner">
+        <div class="detail-row"><span class="dr-label">Available</span><span class="dr-val">May 15 – Aug 15, 2026</span></div>
+        <div class="detail-row"><span class="dr-label">Beds/Bath</span><span class="dr-val">2 bed / 2 bath</span></div>
+        <div class="detail-row"><span class="dr-label">Posted by</span><span class="dr-val">Priya S. &middot; via IGSA Housing<div class="posted-at">Apr 14, 2026 &middot; 9:32 AM CDT</div></span></div>
+        <div class="amenities-row">
+          <span class="amenity">In-unit W/D</span>
+          <span class="amenity">Pool</span>
+          <span class="amenity">Gym</span>
+          <span class="amenity">Pet friendly</span>
+          <span class="amenity">Furnished</span>
+        </div>
+        <div class="snippet-row">"Subleasing my room at The Stack for summer. Roommates are chill. $750/mo all-in. May–Aug. DM me!"</div>
+        <div class="card-auth">
+          <div class="card-auth-title">&#128274; Verify to see contact info</div>
+          <div class="card-auth-body">Sign in with your @tamu.edu email and confirm your number via WhatsApp. Takes ~60 seconds.</div>
+          <div class="card-auth-actions">
+            <a class="btn btn-primary" href="/login">Sign in with @tamu.edu</a>
+          </div>
         </div>
       </div>
     </div>
+  </article>
 
-    <!-- Card 2 — fresh -->
-    <div class="card-link" onclick="showDetail('roommate')">
-      <div class="listing-card">
-        <div class="freshness">
-          <span class="fresh-dot green"></span>
-          <span>1d ago</span>
+  <!-- Card 2: Callaway -->
+  <article class="listing sublease" data-city="college-station" tabindex="0" role="button" aria-expanded="false">
+    <div class="listing-head" onclick="toggleListing(this.parentElement)">
+      <div class="listing-info">
+        <div class="listing-name">The Callaway House — 1BR <small>College Station</small></div>
+        <div class="listing-meta">
+          <span class="pill pill-sub">Sublease</span>
+          <span class="pill pill-price">$810/mo</span>
+          <span class="pill pill-stale">8d ago</span>
         </div>
-        <div class="listing-badge" style="color:#166534;background:#dcfce7;">ROOMMATE</div>
-        <div class="listing-location">University Trails</div>
-        <div class="listing-price">$580/mo</div>
-        <div class="listing-beds">4bd / 4bath</div>
-        <div class="listing-avail">Available: Jun 1, 2026</div>
-        <div class="listing-footer">
-          <span class="listing-sender">posted by Marcus T.</span>
-          <span class="listing-source">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-            from WA group
-          </span>
+        <div class="listing-summary">Aisha K. &middot; May 20 &ndash; Jul 31, 2026 &middot; Parking, utilities incl.</div>
+        <div class="expand-hint">Tap to see details</div>
+      </div>
+      <span class="listing-chevron">&#9656;</span>
+    </div>
+    <div class="listing-body">
+      <div class="listing-body-inner">
+        <div class="detail-row"><span class="dr-label">Available</span><span class="dr-val">May 20 – Jul 31, 2026</span></div>
+        <div class="detail-row"><span class="dr-label">Beds/Bath</span><span class="dr-val">1 bed / 1 bath</span></div>
+        <div class="detail-row"><span class="dr-label">Posted by</span><span class="dr-val">Aisha K. &middot; via Texas City Housing<div class="posted-at">Apr 6, 2026 &middot; 2:14 PM CDT</div></span></div>
+        <div class="amenities-row">
+          <span class="amenity">Parking</span>
+          <span class="amenity">W/D in building</span>
+          <span class="amenity">Utilities included</span>
+          <span class="amenity">No pets</span>
+        </div>
+        <div class="snippet-row">"Looking for someone to take over my 1BR sublease at Callaway. May–July. Utilities included. $810/mo."</div>
+        <div class="card-auth">
+          <div class="card-auth-title">&#128274; Verify to see contact info</div>
+          <div class="card-auth-body">Sign in with your @tamu.edu email and confirm your number via WhatsApp. Takes ~60 seconds.</div>
+          <div class="card-auth-actions">
+            <a class="btn btn-primary" href="/login">Sign in with @tamu.edu</a>
+          </div>
         </div>
       </div>
     </div>
+  </article>
 
-    <!-- Card 3 — a few days old -->
-    <div class="card-link" onclick="showDetail('lease')">
-      <div class="listing-card">
-        <div class="freshness">
-          <span class="fresh-dot yellow"></span>
-          <span>3d ago</span>
+  <!-- ── ROOMMATE ── -->
+  <div class="section-label roommate">&#128101; Roommate Wanted <span class="section-count">(43)</span></div>
+
+  <!-- Card 3: University Trails -->
+  <article class="listing roommate" data-city="college-station" tabindex="0" role="button" aria-expanded="false">
+    <div class="listing-head" onclick="toggleListing(this.parentElement)">
+      <div class="listing-info">
+        <div class="listing-name">University Trails — room in 4/4 <small>CS</small></div>
+        <div class="listing-meta">
+          <span class="pill pill-room">Roommate</span>
+          <span class="pill pill-price">$580/mo</span>
+          <span class="pill pill-fresh">1d ago</span>
         </div>
-        <div class="listing-badge" style="color:#1d4ed8;background:#dbeafe;">LEASE TRANSFER</div>
-        <div class="listing-location">Northgate Commons — Studio</div>
-        <div class="listing-price">$620/mo</div>
-        <div class="listing-avail">Available: May 1, 2026</div>
-        <div class="listing-footer">
-          <span class="listing-sender">posted by Jin L.</span>
-          <span class="listing-source">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-            from WA group
-          </span>
+        <div class="listing-summary">Marcus T. &middot; Jun 1, 2026 – May 31, 2027 &middot; Shuttle, gym, pool</div>
+        <div class="expand-hint">Tap to see details</div>
+      </div>
+      <span class="listing-chevron">&#9656;</span>
+    </div>
+    <div class="listing-body">
+      <div class="listing-body-inner">
+        <div class="detail-row"><span class="dr-label">Available</span><span class="dr-val">Jun 1, 2026 – May 31, 2027</span></div>
+        <div class="detail-row"><span class="dr-label">Unit</span><span class="dr-val">4 bed / 4 bath (private room + en-suite)</span></div>
+        <div class="detail-row"><span class="dr-label">Posted by</span><span class="dr-val">Marcus T. &middot; via IGSA Housing<div class="posted-at">Apr 13, 2026 &middot; 11:07 AM CDT</div></span></div>
+        <div class="amenities-row">
+          <span class="amenity">Pool</span>
+          <span class="amenity">Study lounge</span>
+          <span class="amenity">Free parking</span>
+          <span class="amenity">Bus stop</span>
+          <span class="amenity">Gym</span>
+        </div>
+        <div class="snippet-row">"Looking for a roommate at University Trails! Private room. June move-in. 3 other grad students. $580 all-in."</div>
+        <div class="card-auth">
+          <div class="card-auth-title">&#128274; Verify to see contact info</div>
+          <div class="card-auth-body">Sign in with your @tamu.edu email and confirm your number via WhatsApp. Takes ~60 seconds.</div>
+          <div class="card-auth-actions">
+            <a class="btn btn-primary" href="/login">Sign in with @tamu.edu</a>
+          </div>
         </div>
       </div>
     </div>
+  </article>
 
-    <!-- Card 4 — older -->
-    <div class="card-link" onclick="showDetail('sublease')">
-      <div class="listing-card">
-        <div class="freshness">
-          <span class="fresh-dot gray"></span>
-          <span>8d ago</span>
+  <!-- ── LEASE TRANSFER ── -->
+  <div class="section-label lease">&#128196; Lease Transfer <span class="section-count">(25)</span></div>
+
+  <!-- Card 4: Northgate Commons -->
+  <article class="listing lease" data-city="college-station" tabindex="0" role="button" aria-expanded="false">
+    <div class="listing-head" onclick="toggleListing(this.parentElement)">
+      <div class="listing-info">
+        <div class="listing-name">Northgate Commons — Studio <small>CS</small></div>
+        <div class="listing-meta">
+          <span class="pill pill-lease">Lease Transfer</span>
+          <span class="pill pill-price">$620/mo</span>
+          <span class="pill pill-stale">3d ago</span>
         </div>
-        <div class="listing-badge" style="color:#fff;background:#500000;">SUBLEASE</div>
-        <div class="listing-location">The Callaway House — 1BR</div>
-        <div class="listing-price">$810/mo</div>
-        <div class="listing-beds">1bd / 1bath</div>
-        <div class="listing-avail">Available: May 20, 2026</div>
-        <div class="listing-footer">
-          <span class="listing-sender">posted by Aisha K.</span>
-          <span class="listing-source">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-            from WA group
-          </span>
+        <div class="listing-summary">Jin L. &middot; May 1 &ndash; Jul 31, 2026 &middot; Furnished, internet incl.</div>
+        <div class="expand-hint">Tap to see details</div>
+      </div>
+      <span class="listing-chevron">&#9656;</span>
+    </div>
+    <div class="listing-body">
+      <div class="listing-body-inner">
+        <div class="detail-row"><span class="dr-label">Available</span><span class="dr-val">May 1 – Jul 31, 2026</span></div>
+        <div class="detail-row"><span class="dr-label">Unit</span><span class="dr-val">Studio / 1 bath</span></div>
+        <div class="detail-row"><span class="dr-label">Posted by</span><span class="dr-val">Jin L. &middot; via TAMU Housing WA<div class="posted-at">Apr 11, 2026 &middot; 6:48 PM CDT</div></span></div>
+        <div class="amenities-row">
+          <span class="amenity">Furnished</span>
+          <span class="amenity">High-speed internet</span>
+          <span class="amenity">Near bus route</span>
+        </div>
+        <div class="snippet-row">"Need to transfer my lease at Northgate Commons — leaving for internship in May. Furnished studio. $620 incl. internet."</div>
+        <div class="card-auth">
+          <div class="card-auth-title">&#128274; Verify to see contact info</div>
+          <div class="card-auth-body">Sign in with your @tamu.edu email and confirm your number via WhatsApp. Takes ~60 seconds.</div>
+          <div class="card-auth-actions">
+            <a class="btn btn-primary" href="/login">Sign in with @tamu.edu</a>
+          </div>
         </div>
       </div>
     </div>
+  </article>
 
-  </div><!-- /listing-grid -->
-</div><!-- /page -->
-</div><!-- /board-view -->
-
-
-<!-- ══════════════════════════════════════════
-     DETAIL VIEW
-══════════════════════════════════════════ -->
-<div id="detail-view">
-<div class="page" style="max-width:700px;">
-
-  <a class="back-link" onclick="showBoard()">&#8592; All listings</a>
-
-  <div id="detail-badge" class="detail-badge"></div>
-  <div id="detail-title" class="detail-title"></div>
-  <div class="detail-meta">
-    <span id="detail-freshness"></span>
-    <span id="detail-wa-pill" class="wa-pill">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-      Posted via TAMU WhatsApp group
-    </span>
-  </div>
-
-  <div class="card">
-    <div class="section">
-      <div class="section-heading">Details</div>
-      <table class="detail-table">
-        <tr><td class="dl-label">Price</td><td class="dl-val" id="d-price"></td></tr>
-        <tr><td class="dl-label">Available</td><td class="dl-val" id="d-avail"></td></tr>
-        <tr><td class="dl-label">End date</td><td class="dl-val" id="d-end"></td></tr>
-        <tr><td class="dl-label">Bedrooms</td><td class="dl-val" id="d-beds"></td></tr>
-        <tr><td class="dl-label">Bathrooms</td><td class="dl-val" id="d-baths"></td></tr>
-        <tr><td class="dl-label">Posted by</td><td class="dl-val" id="d-sender"></td></tr>
-      </table>
-    </div>
-    <div class="section">
-      <div class="section-heading">Amenities</div>
-      <div class="amenities">
-        <span class="amenity-pill">In-unit W/D</span>
-        <span class="amenity-pill">Pool</span>
-        <span class="amenity-pill">Gym</span>
-        <span class="amenity-pill">Pet friendly</span>
-        <span class="amenity-pill">Furnished</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Auth gate — improved -->
-  <div class="auth-gate">
-    <div class="auth-gate-icon">📱</div>
-    <div class="auth-gate-title">Verify to see contact info</div>
-    <div class="auth-gate-body">
-      This listing was posted by a real TAMU student in a private WhatsApp group.
-      We verify phone numbers to keep the board spam-free and to make sure
-      the poster only hears from legit students.
-    </div>
-    <div class="auth-gate-trust">
-      <span class="check">✓</span>
-      <span>One-time verification &mdash; sign in with your TAMU email, then confirm your number via WhatsApp OTP. Takes about 60 seconds.</span>
-    </div>
-    <div class="auth-gate-actions">
-      <a class="btn-primary" href="#">Sign in with TAMU email</a>
-      <a class="btn-secondary" href="#">Already have an account? Sign in</a>
-    </div>
-    <div class="auth-gate-skip">Your info is never shared with third parties.</div>
-  </div>
-
+  <div class="footer">162 listings &middot; 8 groups monitored &middot; v3.6</div>
 </div>
-</div><!-- /detail-view -->
 
 <script>
-  var mockData = {
-    sublease: {
-      badge: 'SUBLEASE', badgeColor: '#fff', badgeBg: '#500000',
-      title: 'The Stack — 2BR/2BA', price: '$750/mo',
-      avail: 'May 15, 2026', end: 'Aug 15, 2026',
-      beds: '2', baths: '2', sender: 'Priya S.', freshness: 'today'
-    },
-    roommate: {
-      badge: 'ROOMMATE', badgeColor: '#166534', badgeBg: '#dcfce7',
-      title: 'University Trails', price: '$580/mo',
-      avail: 'Jun 1, 2026', end: 'May 31, 2027',
-      beds: '4', baths: '4', sender: 'Marcus T.', freshness: '1d ago'
-    },
-    lease: {
-      badge: 'LEASE TRANSFER', badgeColor: '#1d4ed8', badgeBg: '#dbeafe',
-      title: 'Northgate Commons — Studio', price: '$620/mo',
-      avail: 'May 1, 2026', end: 'Jul 31, 2026',
-      beds: '—', baths: '1', sender: 'Jin L.', freshness: '3d ago'
+function toggleListing(el) {
+  el.classList.toggle('open');
+  el.setAttribute('aria-expanded', el.classList.contains('open'));
+}
+
+var activeType = 'all';
+var activeCity = null; // null = no city filter
+
+function applyFilters() {
+  document.querySelectorAll('.listing').forEach(function(card) {
+    var typeMatch = activeType === 'all' || card.classList.contains(activeType);
+    var cityMatch = !activeCity || card.getAttribute('data-city') === activeCity;
+    card.style.display = (typeMatch && cityMatch) ? '' : 'none';
+  });
+  // Hide section labels if all their cards are hidden
+  document.querySelectorAll('.section-label').forEach(function(label) {
+    var sectionType = label.classList.contains('sublease') ? 'sublease'
+      : label.classList.contains('roommate') ? 'roommate' : 'lease';
+    var typeVisible = activeType === 'all' || activeType === sectionType;
+    if (!typeVisible) { label.style.display = 'none'; return; }
+    // Check if any card in this section is visible
+    var next = label.nextElementSibling;
+    var anyVisible = false;
+    while (next && next.classList.contains('listing')) {
+      if (next.style.display !== 'none') { anyVisible = true; break; }
+      next = next.nextElementSibling;
     }
-  };
+    label.style.display = anyVisible ? '' : 'none';
+  });
+}
 
-  function showDetail(type) {
-    var d = mockData[type];
-    document.getElementById('detail-badge').textContent = d.badge;
-    document.getElementById('detail-badge').style.color = d.badgeColor;
-    document.getElementById('detail-badge').style.background = d.badgeBg;
-    document.getElementById('detail-title').textContent = d.title;
-    document.getElementById('detail-freshness').textContent = d.freshness;
-    document.getElementById('d-price').textContent = d.price;
-    document.getElementById('d-avail').textContent = d.avail;
-    document.getElementById('d-end').textContent = d.end;
-    document.getElementById('d-beds').textContent = d.beds;
-    document.getElementById('d-baths').textContent = d.baths;
-    document.getElementById('d-sender').textContent = d.sender;
-    document.getElementById('board-view').style.display = 'none';
-    document.getElementById('detail-view').style.display = 'block';
-    window.scrollTo(0, 0);
-  }
+function toggleType(pill, type) {
+  document.querySelectorAll('.type-pill').forEach(function(p) { p.classList.remove('active'); });
+  pill.classList.add('active');
+  activeType = type;
+  applyFilters();
+}
 
-  function showBoard() {
-    document.getElementById('board-view').style.display = 'block';
-    document.getElementById('detail-view').style.display = 'none';
-    window.scrollTo(0, 0);
+function toggleCity(pill, city) {
+  // Toggle: clicking active city pill deactivates it
+  if (activeCity === city) {
+    activeCity = null;
+    pill.classList.remove('active');
+  } else {
+    document.querySelectorAll('.city-pill').forEach(function(p) { p.classList.remove('active'); });
+    pill.classList.add('active');
+    activeCity = city;
   }
-
-  function filterChips(el) {
-    document.querySelectorAll('.chip').forEach(function(c) {
-      c.className = 'chip chip-inactive';
-    });
-    el.className = 'chip chip-active';
-  }
+  applyFilters();
+}
 </script>
 </body>
 </html>

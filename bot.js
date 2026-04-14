@@ -112,6 +112,7 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
         ? pnJid.split('@')[0]
         : await resolveSenderNumber(senderJid);
     const senderName   = msg.pushName || 'Unknown';
+    const sentAt       = msg.messageTimestamp ? new Date(msg.messageTimestamp * 1000) : null;
 
     const parsed = await parseMessage(body, senderName);
 
@@ -129,7 +130,7 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
     if (!parsed.isRequest) return;
 
     if (parsed.category === 'housing') {
-        await upsertHousing(parsed.housing, body, senderNumber, senderName);
+        await upsertHousing(parsed.housing, body, senderNumber, senderName, sentAt);
         return;
     }
 
