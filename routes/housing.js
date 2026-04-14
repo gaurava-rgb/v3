@@ -5,6 +5,7 @@ var router = express.Router();
 var { getActiveListings, getListingBySlug } = require('../lib/housing');
 var { renderHousingBoard, renderListingPage } = require('../lib/views');
 var { optionalAuth } = require('../middleware/auth');
+var { isEmailWaVerified } = require('../lib/profiles');
 
 router.get('/housing', optionalAuth, async function(req, res) {
     try {
@@ -25,7 +26,19 @@ router.get('/listing/:slug', optionalAuth, async function(req, res) {
             return res.status(404).send('Listing not found');
         }
         var isLoggedIn = !!req.user;
-        var html = renderListingPage(listing, isLoggedIn);
+
+        // isWaVerified: true if user has a live phone cookie (completed WA OTP),
+        // or if their email is already linked to a verified phone in user_profiles.
+        var isWaVerified = false;
+        if (req.user) {
+            if (req.user.auth_type === 'phone') {
+                isWaVerified = true;
+            } else if (req.user.email) {
+                isWaVerified = await isEmailWaVerified(req.user.email);
+            }
+        }
+
+        var html = renderListingPage(listing, isLoggedIn, isWaVerified);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
     } catch (err) {
