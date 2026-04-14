@@ -4,12 +4,12 @@ var express = require('express');
 var router = express.Router();
 var { getActiveListings, getListingBySlug } = require('../lib/housing');
 var { renderHousingBoard, renderListingPage } = require('../lib/views');
-var { optionalAuth, parsePhoneSession } = require('../middleware/auth');
+var { optionalAuth } = require('../middleware/auth');
 
-router.get('/housing', optionalAuth, parsePhoneSession, async function(req, res) {
+router.get('/housing', optionalAuth, async function(req, res) {
     try {
         var listings = await getActiveListings({ listing_type: req.query.type || null });
-        var isLoggedIn = !!(req.user || req.waUser);
+        var isLoggedIn = !!req.user;
         var html = renderHousingBoard(listings, req.query.type || 'all', isLoggedIn);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
@@ -18,13 +18,13 @@ router.get('/housing', optionalAuth, parsePhoneSession, async function(req, res)
     }
 });
 
-router.get('/listing/:slug', optionalAuth, parsePhoneSession, async function(req, res) {
+router.get('/listing/:slug', optionalAuth, async function(req, res) {
     try {
         var listing = await getListingBySlug(req.params.slug);
         if (!listing) {
             return res.status(404).send('Listing not found');
         }
-        var isLoggedIn = !!(req.user || req.waUser);
+        var isLoggedIn = !!req.user;
         var html = renderListingPage(listing, isLoggedIn);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
