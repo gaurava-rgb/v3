@@ -27,6 +27,7 @@ app.use(require('./routes/clusters'));
 app.use(require('./routes/auth'));
 app.use(require('./routes/profile'));
 app.use(require('./routes/submit'));
+app.use(require('./routes/housing'));
 app.use(require('./routes/digest'));
 app.use(require('./routes/static'));
 

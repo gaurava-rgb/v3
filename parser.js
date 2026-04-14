@@ -16,17 +16,20 @@ function buildSystemPrompt() {
     const today = new Date().toISOString().split('T')[0];
     const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
 
-    return `You are a message parser for a university ride-sharing platform at Texas A&M.
+    return `You are a message parser for a university community platform at Texas A&M.
 Analyze WhatsApp messages and extract structured information.
 
 IMPORTANT: Most messages are casual chat. Only extract data when someone is clearly:
 - Looking for a ride or offering a ride
 - Asking for help or offering help
+- Posting about housing (sublease, roommate, lease transfer)
 
 For casual messages (greetings, jokes, replies, reactions, thank yous), return:
 {"isRequest": false}
 
-When you detect a valid request or offer, return:
+--- RIDE MESSAGES ---
+
+When you detect a ride need or offer, return:
 {
   "isRequest": true,
   "type": "need" or "offer",
@@ -48,7 +51,7 @@ When you detect a valid request or offer, return:
 isRequest = true for BOTH needs (looking for a ride) AND offers (providing a ride).
 isRequest = false ONLY for casual chat (greetings, reactions, replies, thank yous).
 
-Common patterns (all return isRequest: true):
+Common ride patterns (all return isRequest: true):
 - "anyone going to Houston?" -> need, ride
 - "can drop 2 people to DFW" -> offer, ride
 - "need ride to IAH Friday" -> need, ride
@@ -59,6 +62,35 @@ Common patterns (all return isRequest: true):
 - "offering ride to DFW this weekend" -> offer, ride
 - "need help moving" -> need, help
 - "can help with groceries" -> offer, help
+
+--- HOUSING MESSAGES ---
+
+When you detect a housing listing (sublease, roommate search, lease transfer), return:
+{
+  "isRequest": true,
+  "type": "offer",
+  "category": "housing",
+  "housing": {
+    "listing_type": "sublease" | "roommate" | "lease_transfer" | "other",
+    "location": "string or null",
+    "price": integer dollars per month or null,
+    "available_date": "YYYY-MM-DD" or null,
+    "end_date": "YYYY-MM-DD" or null,
+    "bedrooms": integer or null,
+    "bathrooms": number or null,
+    "contact_info": "raw contact string or null",
+    "amenities": ["pool", "gym", "utilities_included", ...]
+  }
+}
+
+Housing trigger keywords: sublease, sublet, roommate, bedroom, lease, rent, furnished,
+utilities, /mo, $/month, apartment, available, 1br, 2br, 1bd, 2bd, bath, sqft.
+
+Common housing patterns:
+- "subletting my apartment May-Aug, $900/mo" -> housing, sublease
+- "looking for roommate for 2br/2ba near campus" -> housing, roommate
+- "need someone to take over my lease" -> housing, lease_transfer
+- "furnished room available June 1st, $650/mo, utilities included" -> housing, sublease
 
 Today is ${dayName}, ${today}. Resolve relative dates:
 - "tomorrow" -> next day
@@ -144,13 +176,31 @@ async function parseMessage(message, senderName = '') {
                 parsed.origin = 'College Station';
             }
 
-            // Ensure v3 fuzzy fields always have defaults
-            parsed.date_fuzzy     = parsed.date_fuzzy     ?? false;
-            parsed.possible_dates = parsed.possible_dates ?? [];
-            parsed.ride_plan_time = parsed.ride_plan_time ?? null;
-            parsed.time_fuzzy     = parsed.time_fuzzy     ?? true;
+            if (parsed.category === 'ride') {
+                // Ensure v3 fuzzy fields always have defaults
+                parsed.date_fuzzy     = parsed.date_fuzzy     ?? false;
+                parsed.possible_dates = parsed.possible_dates ?? [];
+                parsed.ride_plan_time = parsed.ride_plan_time ?? null;
+                parsed.time_fuzzy     = parsed.time_fuzzy     ?? true;
 
-            console.log(`[Parser] Extracted: ${parsed.type} ${parsed.category} -> ${parsed.destination || 'N/A'} on ${parsed.date || 'N/A'} (date_fuzzy=${parsed.date_fuzzy}, time_fuzzy=${parsed.time_fuzzy})`);
+                console.log(`[Parser] Extracted: ${parsed.type} ${parsed.category} -> ${parsed.destination || 'N/A'} on ${parsed.date || 'N/A'} (date_fuzzy=${parsed.date_fuzzy}, time_fuzzy=${parsed.time_fuzzy})`);
+            } else if (parsed.category === 'housing') {
+                // Ensure housing sub-object always exists with null defaults
+                const h = parsed.housing || {};
+                parsed.housing = {
+                    listing_type:   h.listing_type   ?? null,
+                    location:       h.location       ?? null,
+                    price:          h.price          ?? null,
+                    available_date: h.available_date ?? null,
+                    end_date:       h.end_date       ?? null,
+                    bedrooms:       h.bedrooms       ?? null,
+                    bathrooms:      h.bathrooms      ?? null,
+                    contact_info:   h.contact_info   ?? null,
+                    amenities:      h.amenities      ?? []
+                };
+
+                console.log(`[Parser] Housing: ${parsed.housing.listing_type} in ${parsed.housing.location} @ $${parsed.housing.price}/mo`);
+            }
         }
 
         return parsed;

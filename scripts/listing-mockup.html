@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listing Mockup — ridesplit.app</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f2f2f7;
+    color: #1a1a1a;
+    min-height: 100vh;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    background: #fff;
+    border-bottom: 1px solid #e5e5ea;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .topbar-logo { font-size: 15px; font-weight: 700; color: #500000; letter-spacing: -0.3px; }
+  .topbar-sep { color: #ccc; }
+  .topbar-section { font-size: 13px; color: #666; }
+  .topbar-right { display: flex; gap: 8px; align-items: center; }
+  .btn-ghost {
+    font-size: 13px; font-weight: 500; color: #500000;
+    background: none; border: 1px solid #e0c8c8; border-radius: 8px;
+    padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-ghost:hover { background: #fdf5f5; }
+
+  /* ── Claim banner ── */
+  .claim-banner {
+    background: linear-gradient(135deg, #500000, #7a1a1a);
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .claim-banner-text { font-size: 13px; line-height: 1.4; }
+  .claim-banner-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .btn-claim {
+    background: #fff; color: #500000; font-size: 13px; font-weight: 600;
+    border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0;
+  }
+
+  /* ── Main layout ── */
+  .page { max-width: 680px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  /* ── Image strip ── */
+  .images {
+    border-radius: 14px;
+    overflow: hidden;
+    background: #e5e5ea;
+    margin-bottom: 16px;
+    position: relative;
+    height: 220px;
+    display: flex;
+    gap: 3px;
+  }
+  .img-main {
+    flex: 2;
+    background: linear-gradient(160deg, #c8d6e0 0%, #a8bfc9 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+  }
+  .img-grid {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .img-thumb {
+    flex: 1;
+    background: linear-gradient(160deg, #b8c8d4 0%, #98b0bc 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .img-thumb:last-child {
+    background: rgba(0,0,0,0.35);
+    position: relative;
+  }
+  .img-count {
+    color: #fff; font-size: 14px; font-weight: 600;
+  }
+  .no-images {
+    height: 160px; border-radius: 14px; border: 2px dashed #d1d1d6;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; color: #8e8e93; font-size: 13px; margin-bottom: 16px;
+    background: #fff;
+  }
+  .no-images svg { opacity: 0.35; }
+  .no-images .add-photos-hint { font-size: 12px; color: #aeaeb2; }
+
+  /* ── Card ── */
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  /* ── Header ── */
+  .listing-header { margin-bottom: 14px; }
+  .badges { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .badge {
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .badge-type { background: #fff3f3; color: #500000; border: 1px solid #f0c8c8; }
+  .badge-furnished { background: #f0faf0; color: #2d6a2d; border: 1px solid #c8e6c8; }
+  .badge-utilities { background: #f5f0ff; color: #5a3d8a; border: 1px solid #d8c8f0; }
+  .badge-avail { background: #fff8e8; color: #7a5500; border: 1px solid #f0e0b0; }
+
+  .listing-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; margin-bottom: 4px; }
+  .listing-sub { font-size: 14px; color: #666; }
+
+  /* ── Price row ── */
+  .price-row {
+    display: flex; align-items: baseline; gap: 6px;
+    margin: 14px 0;
+    padding: 14px 0;
+    border-top: 1px solid #f2f2f7;
+    border-bottom: 1px solid #f2f2f7;
+  }
+  .price { font-size: 28px; font-weight: 800; color: #1a1a1a; letter-spacing: -1px; }
+  .price-mo { font-size: 15px; color: #888; font-weight: 400; }
+  .price-neg { font-size: 12px; color: #2d6a2d; background: #f0faf0; border-radius: 6px; padding: 2px 7px; font-weight: 600; }
+
+  /* ── Details grid ── */
+  .details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .detail-item {}
+  .detail-label { font-size: 11px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; font-weight: 600; }
+  .detail-value { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: #f2f2f7; margin: 16px 0; }
+
+  /* ── Contact section ── */
+  .contact-section { position: relative; }
+  .contact-locked {
+    border-radius: 12px;
+    border: 1.5px solid #e5e5ea;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .contact-blur {
+    filter: blur(5px);
+    user-select: none;
+    pointer-events: none;
+  }
+  .contact-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .contact-row:last-child { margin-bottom: 0; }
+  .contact-icon {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .contact-icon-phone { background: #e8f5e9; }
+  .contact-icon-wa { background: #e8f5e9; }
+  .contact-info-label { font-size: 11px; color: #8e8e93; margin-bottom: 1px; }
+  .contact-info-value { font-size: 15px; font-weight: 600; }
+
+  .lock-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(2px);
+    border-radius: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 16px;
+  }
+  .lock-icon { font-size: 22px; }
+  .lock-label { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .lock-sub { font-size: 12px; color: #666; margin-top: -4px; }
+  .btn-signin {
+    background: #500000; color: #fff; font-size: 13px; font-weight: 600;
+    border: none; border-radius: 10px; padding: 10px 20px; cursor: pointer;
+    width: 100%;
+  }
+
+  /* ── Location ── */
+  .location-row { display: flex; align-items: flex-start; gap: 10px; }
+  .location-icon { color: #500000; flex-shrink: 0; margin-top: 2px; }
+  .location-text { font-size: 14px; color: #1a1a1a; line-height: 1.4; }
+  .location-blur { filter: blur(6px); user-select: none; font-size: 14px; }
+  .map-stub {
+    margin-top: 12px; border-radius: 10px; overflow: hidden;
+    background: linear-gradient(160deg, #dce8f0, #c8d8e4);
+    height: 100px; display: flex; align-items: center; justify-content: center;
+    color: #aab8c0; font-size: 12px; filter: blur(3px);
+  }
+
+  /* ── Posted by ── */
+  .posted-row { display: flex; align-items: center; gap: 10px; }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, #500000, #7a3030);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .posted-name { font-size: 14px; font-weight: 600; }
+  .posted-meta { font-size: 12px; color: #888; }
+  .claimed-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; color: #2d6a2d;
+    background: #f0faf0; border-radius: 6px; padding: 2px 7px;
+    margin-left: 6px;
+  }
+
+  /* ── Notes ── */
+  .notes { font-size: 14px; color: #444; line-height: 1.6; }
+
+  /* ── Share strip ── */
+  .share-strip {
+    display: flex; gap: 8px; margin-top: 16px;
+  }
+  .btn-share {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap-6px;
+    padding: 11px; border-radius: 10px; font-size: 13px; font-weight: 600;
+    border: 1.5px solid #e5e5ea; background: #fff; cursor: pointer; color: #1a1a1a;
+    gap: 6px;
+  }
+  .btn-share-wa {
+    background: #e8f5e9; border-color: #c8e6c8; color: #1a6e1a;
+  }
+  .btn-share-link { background: #f5f5f7; border-color: #e5e5ea; }
+
+  /* ── Sidebar (desktop) ── */
+  @media (min-width: 640px) {
+    .page { padding: 28px 20px 80px; }
+    .images { height: 280px; }
+    .listing-title { font-size: 26px; }
+    .price { font-size: 32px; }
+  }
+
+  /* ── Footer note ── */
+  .footer-note {
+    text-align: center; font-size: 12px; color: #aeaeb2; margin-top: 20px;
+  }
+  .footer-note a { color: #500000; text-decoration: none; }
+
+  /* ── Mockup label (not in real product) ── */
+  .mockup-label {
+    background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;
+    padding: 8px 14px; font-size: 12px; color: #6d4c00; text-align: center;
+    margin-bottom: 14px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Top navigation -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">ridesplit.app</span>
+    <span class="topbar-sep">/</span>
+    <span class="topbar-section">Housing</span>
+  </div>
+  <div class="topbar-right">
+    <a class="btn-ghost" href="#">Sign in</a>
+  </div>
+</div>
+
+<!-- Claim banner — shown to the person who posted -->
+<div class="claim-banner">
+  <div class="claim-banner-text">
+    <strong>Is this your listing?</strong>
+    Claim it to add photos, edit details, and share your link.
+  </div>
+  <button class="btn-claim">Claim →</button>
+</div>
+
+<div class="page">
+
+  <div class="mockup-label">
+    Preview — this is what your listing would look like on ridesplit.app
+  </div>
+
+  <!-- Images -->
+  <div class="no-images">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="1.5">
+      <rect x="3" y="3" width="18" height="18" rx="3"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21 15 16 10 5 21"/>
+    </svg>
+    No photos yet
+    <span class="add-photos-hint">Claim this listing to add up to 5 photos</span>
+  </div>
+
+  <!-- Main card -->
+  <div class="card">
+    <div class="listing-header">
+      <div class="badges">
+        <span class="badge badge-type">Sublease</span>
+        <span class="badge badge-furnished">Furnished</span>
+        <span class="badge badge-utilities">+ Utilities</span>
+        <span class="badge badge-avail">Apr – Jul 2026</span>
+      </div>
+      <div class="listing-title">Reveille Ranch</div>
+      <div class="listing-sub">4 bed · 4 bath · College Station</div>
+    </div>
+
+    <div class="price-row">
+      <span class="price">$400</span>
+      <span class="price-mo">/month</span>
+      <span class="price-neg">Negotiable</span>
+    </div>
+
+    <div class="details-grid">
+      <div class="detail-item">
+        <div class="detail-label">Bedrooms</div>
+        <div class="detail-value">4</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Bathrooms</div>
+        <div class="detail-value">4</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Available from</div>
+        <div class="detail-value">Apr 1, 2026</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Until</div>
+        <div class="detail-value">Jul 31, 2026</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Furnished</div>
+        <div class="detail-value">Yes</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Utilities</div>
+        <div class="detail-value">Not included</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notes -->
+  <div class="card">
+    <div class="detail-label" style="margin-bottom:8px;">About this listing</div>
+    <div class="notes">
+      Sublease / Lease Transfer for a 4B4B at Reveille Ranch. Available from April 2026 till July 2026 when lease ends. Located at 3645 Wellborn Road, Bryan, TX 77801. Rent is $400/month + utilities. Fully furnished. Great location, easy access to campus.
+    </div>
+
+    <div class="share-strip">
+      <button class="btn-share btn-share-wa">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="#1a6e1a"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.535 5.86L.057 23.5l5.782-1.516A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.656-.502-5.188-1.381l-.37-.22-3.436.9.918-3.352-.242-.386A9.937 9.937 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+        Share on WhatsApp
+      </button>
+      <button class="btn-share btn-share-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+        Copy link
+      </button>
+    </div>
+  </div>
+
+  <!-- Location (gated) -->
+  <div class="card">
+    <div class="detail-label" style="margin-bottom:12px;">Location</div>
+    <div class="location-row">
+      <svg class="location-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#500000" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <div>
+        <div class="location-text" style="color:#888; font-size:13px;">Full address visible after sign-in</div>
+        <div class="location-blur">3645 Wellborn Road, Bryan, TX 77801</div>
+      </div>
+    </div>
+    <div class="map-stub">Map</div>
+  </div>
+
+  <!-- Contact (gated) -->
+  <div class="card">
+    <div class="detail-label" style="margin-bottom:12px;">Contact</div>
+
+    <div class="contact-locked">
+      <!-- Blurred placeholder content -->
+      <div class="contact-blur">
+        <div class="contact-row">
+          <div class="contact-icon contact-icon-phone">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d6a2d" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.18 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.09a16 16 0 006 6l.56-.56a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
+          </div>
+          <div>
+            <div class="contact-info-label">Phone</div>
+            <div class="contact-info-value">+1 (979) 350-0982</div>
+          </div>
+        </div>
+        <div class="contact-row">
+          <div class="contact-icon contact-icon-wa">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#2d6a2d"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.535 5.86L.057 23.5l5.782-1.516A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.656-.502-5.188-1.381l-.37-.22-3.436.9.918-3.352-.242-.386A9.937 9.937 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+          </div>
+          <div>
+            <div class="contact-info-label">WhatsApp</div>
+            <div class="contact-info-value">Message on WhatsApp</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lock overlay -->
+      <div class="lock-overlay">
+        <div class="lock-icon">🔒</div>
+        <div class="lock-label">Sign in to see contact info</div>
+        <div class="lock-sub">Takes 30 seconds · @tamu.edu only</div>
+        <button class="btn-signin">Sign in with @tamu.edu →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Posted by -->
+  <div class="card">
+    <div class="detail-label" style="margin-bottom:12px;">Posted by</div>
+    <div class="posted-row">
+      <div class="avatar">H</div>
+      <div>
+        <div class="posted-name">
+          Haridher Pandiyan
+          <span class="claimed-badge">✓ Verified</span>
+        </div>
+        <div class="posted-meta">Spotted in TAMU Housing · Apr 13</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Spotted from TAMU WhatsApp groups · <a href="#">ridesplit.app/housing</a>
+  </div>
+
+</div>
+</body>
+</html>
