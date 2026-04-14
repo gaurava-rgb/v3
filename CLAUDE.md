@@ -19,6 +19,12 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - Live: v3.myburrow.club
 - Deploy: `git push && ssh agconnect "cd ~/aggieconnect-v3 && git pull && pm2 restart ecosystem.config.js"`
 
+## Display
+- Always show timestamps in Central US time, never raw UTC
+- Format: `Apr 14, 12:10 AM CDT (UTC-5)` — always include date and offset
+- CDT (UTC-5): mid-March through early November. CST (UTC-6): November through mid-March
+- Apply to all log lines, deploy times, event times quoted in responses
+
 ## Rules
 - Do NOT modify bot.js unless explicitly asked — it's connected to live WhatsApp
 - Do NOT delete .v3_auth/ — it contains Baileys auth state

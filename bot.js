@@ -20,6 +20,7 @@ const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 
 const { parseMessage } = require('./parser');
+const { upsertHousing } = require('./lib/housing');
 const {
     supabase,
     saveRequest, logMessage, messageAlreadyProcessed,
@@ -126,6 +127,11 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
     });
 
     if (!parsed.isRequest) return;
+
+    if (parsed.category === 'housing') {
+        await upsertHousing(parsed.housing, body, senderNumber, senderName);
+        return;
+    }
 
     const request = await saveRequest({
         source:        'whatsapp-baileys-v3',

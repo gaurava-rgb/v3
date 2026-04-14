@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Housing Board — RideSplit (Mockup)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #fafafa; color: #1a1a1a; min-height: 100vh; }
+
+  /* ── Nav ── */
+  .nav { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 0 20px;
+         display: flex; align-items: center; gap: 20px; height: 52px; position: sticky; top: 0; z-index: 10; }
+  .nav-logo { font-size: 16px; font-weight: 700; color: #500000; text-decoration: none;
+              letter-spacing: -0.3px; margin-right: 8px; }
+  .nav-link { font-size: 14px; color: #444; text-decoration: none; }
+  .nav-link:hover { color: #500000; }
+  .nav-link.current { font-weight: 700; color: #500000; }
+  .nav-right { margin-left: auto; font-size: 13px; }
+  .nav-right a { color: #500000; text-decoration: none; font-weight: 500; }
+  .nav-right a:hover { text-decoration: underline; }
+
+  /* ── Page shell ── */
+  .page { max-width: 960px; margin: 0 auto; padding: 32px 20px 60px; }
+
+  /* ── Board header ── */
+  .board-header { margin-bottom: 24px; }
+  .board-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
+  .board-subhead {
+    font-size: 14px; color: #555; display: flex; align-items: center; gap: 6px;
+  }
+  .board-subhead .wa-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #25d366; flex-shrink: 0;
+  }
+
+  /* ── Filters ── */
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+  .chip { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 13px;
+          font-weight: 500; text-decoration: none; cursor: pointer;
+          transition: background 0.15s, color 0.15s, border-color 0.15s; border: none; }
+  .chip-active { background: #500000; color: #fff; border: 1.5px solid #500000; }
+  .chip-inactive { background: #fff; color: #444; border: 1.5px solid #e8e8e8; }
+  .chip-inactive:hover { border-color: #500000; color: #500000; }
+
+  /* ── Listing grid ── */
+  .listing-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 600px) { .listing-grid { grid-template-columns: 1fr; } }
+
+  .card-link { text-decoration: none; color: inherit; display: block; cursor: pointer; }
+  .listing-card {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;
+    padding: 18px 20px; transition: box-shadow 0.15s, transform 0.15s;
+    position: relative;
+  }
+  .listing-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); transform: translateY(-2px); }
+
+  /* Freshness dot */
+  .freshness {
+    position: absolute; top: 16px; right: 16px;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; color: #888;
+  }
+  .fresh-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .fresh-dot.green { background: #22c55e; }
+  .fresh-dot.yellow { background: #f59e0b; }
+  .fresh-dot.gray { background: #d1d5db; }
+
+  .listing-badge {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    border-radius: 6px; padding: 2px 8px; margin-bottom: 10px;
+  }
+  .listing-location { font-size: 16px; font-weight: 700; margin-bottom: 6px; padding-right: 60px; }
+  .listing-price { font-size: 15px; color: #500000; font-weight: 600; margin-bottom: 4px; }
+  .listing-beds { font-size: 13px; color: #555; margin-bottom: 4px; }
+  .listing-avail { font-size: 13px; color: #555; margin-bottom: 8px; }
+  .listing-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid #f0f0f0; padding-top: 10px; margin-top: 2px;
+  }
+  .listing-sender { font-size: 12px; color: #999; }
+  .listing-source {
+    font-size: 11px; color: #25d366; font-weight: 600;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .listing-source svg { flex-shrink: 0; }
+
+  /* ── Detail page ── */
+  #detail-view { display: none; }
+  #board-view  { display: block; }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 13px; color: #500000; text-decoration: none;
+    margin-bottom: 20px; cursor: pointer;
+  }
+  .back-link:hover { text-decoration: underline; }
+  .detail-badge {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    border-radius: 6px; padding: 3px 10px; margin-bottom: 14px;
+  }
+  .detail-title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
+  .detail-meta {
+    font-size: 13px; color: #888; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .detail-meta .wa-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #f0fdf4; color: #166534; font-size: 12px; font-weight: 600;
+    border-radius: 20px; padding: 2px 8px;
+  }
+
+  .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;
+          padding: 24px; margin-bottom: 16px; }
+  .section { margin-bottom: 20px; }
+  .section:last-child { margin-bottom: 0; }
+  .section-heading {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #888; margin-bottom: 10px;
+  }
+  .detail-table { width: 100%; border-collapse: collapse; }
+  .dl-label { font-size: 13px; color: #888; padding: 6px 12px 6px 0; width: 120px;
+              vertical-align: top; white-space: nowrap; }
+  .dl-val { font-size: 14px; color: #1a1a1a; padding: 6px 0; }
+  .amenities { display: flex; flex-wrap: wrap; gap: 6px; }
+  .amenity-pill {
+    background: #f0f0f0; color: #444; font-size: 12px; font-weight: 500;
+    border-radius: 20px; padding: 3px 10px;
+  }
+
+  /* ── Auth gate (improved) ── */
+  .auth-gate {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 28px 24px;
+  }
+  .auth-gate-icon { font-size: 32px; margin-bottom: 12px; }
+  .auth-gate-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .auth-gate-body { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 6px; }
+  .auth-gate-trust {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+    padding: 10px 14px; margin: 16px 0 20px; font-size: 13px; color: #166534; line-height: 1.5;
+  }
+  .auth-gate-trust .check { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+  .auth-gate-actions { display: flex; flex-direction: column; gap: 10px; }
+  .btn-primary {
+    display: inline-block; padding: 11px 24px; background: #500000; color: #fff;
+    border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none;
+    text-align: center; cursor: pointer; border: none;
+  }
+  .btn-primary:hover { background: #6b0000; }
+  .btn-secondary {
+    display: inline-block; padding: 11px 24px; background: #fff; color: #444;
+    border-radius: 8px; font-size: 14px; font-weight: 500; text-decoration: none;
+    text-align: center; cursor: pointer; border: 1.5px solid #e8e8e8;
+  }
+  .btn-secondary:hover { border-color: #aaa; }
+  .auth-gate-skip { font-size: 12px; color: #aaa; margin-top: 8px; text-align: center; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="#">RideSplit</a>
+  <a class="nav-link current" href="#">Housing</a>
+  <a class="nav-link" href="#">Rides</a>
+  <div class="nav-right"><a href="#">Sign in</a></div>
+</nav>
+
+<!-- ══════════════════════════════════════════
+     BOARD VIEW
+══════════════════════════════════════════ -->
+<div id="board-view">
+<div class="page">
+
+  <div class="board-header">
+    <h1>Housing Board</h1>
+    <div class="board-subhead">
+      <span class="wa-dot"></span>
+      Listings from TAMU student WhatsApp groups &middot; Updated daily
+    </div>
+  </div>
+
+  <div class="filters">
+    <button class="chip chip-active" onclick="filterChips(this)">All</button>
+    <button class="chip chip-inactive" onclick="filterChips(this)">Sublease</button>
+    <button class="chip chip-inactive" onclick="filterChips(this)">Roommate</button>
+    <button class="chip chip-inactive" onclick="filterChips(this)">Lease Transfer</button>
+  </div>
+
+  <div class="listing-grid">
+
+    <!-- Card 1 — very fresh -->
+    <div class="card-link" onclick="showDetail('sublease')">
+      <div class="listing-card">
+        <div class="freshness">
+          <span class="fresh-dot green"></span>
+          <span>today</span>
+        </div>
+        <div class="listing-badge" style="color:#fff;background:#500000;">SUBLEASE</div>
+        <div class="listing-location">The Stack — 2BR/2BA</div>
+        <div class="listing-price">$750/mo</div>
+        <div class="listing-beds">2bd / 2bath</div>
+        <div class="listing-avail">Available: May 15, 2026</div>
+        <div class="listing-footer">
+          <span class="listing-sender">posted by Priya S.</span>
+          <span class="listing-source">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+            from WA group
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2 — fresh -->
+    <div class="card-link" onclick="showDetail('roommate')">
+      <div class="listing-card">
+        <div class="freshness">
+          <span class="fresh-dot green"></span>
+          <span>1d ago</span>
+        </div>
+        <div class="listing-badge" style="color:#166534;background:#dcfce7;">ROOMMATE</div>
+        <div class="listing-location">University Trails</div>
+        <div class="listing-price">$580/mo</div>
+        <div class="listing-beds">4bd / 4bath</div>
+        <div class="listing-avail">Available: Jun 1, 2026</div>
+        <div class="listing-footer">
+          <span class="listing-sender">posted by Marcus T.</span>
+          <span class="listing-source">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+            from WA group
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3 — a few days old -->
+    <div class="card-link" onclick="showDetail('lease')">
+      <div class="listing-card">
+        <div class="freshness">
+          <span class="fresh-dot yellow"></span>
+          <span>3d ago</span>
+        </div>
+        <div class="listing-badge" style="color:#1d4ed8;background:#dbeafe;">LEASE TRANSFER</div>
+        <div class="listing-location">Northgate Commons — Studio</div>
+        <div class="listing-price">$620/mo</div>
+        <div class="listing-avail">Available: May 1, 2026</div>
+        <div class="listing-footer">
+          <span class="listing-sender">posted by Jin L.</span>
+          <span class="listing-source">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+            from WA group
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4 — older -->
+    <div class="card-link" onclick="showDetail('sublease')">
+      <div class="listing-card">
+        <div class="freshness">
+          <span class="fresh-dot gray"></span>
+          <span>8d ago</span>
+        </div>
+        <div class="listing-badge" style="color:#fff;background:#500000;">SUBLEASE</div>
+        <div class="listing-location">The Callaway House — 1BR</div>
+        <div class="listing-price">$810/mo</div>
+        <div class="listing-beds">1bd / 1bath</div>
+        <div class="listing-avail">Available: May 20, 2026</div>
+        <div class="listing-footer">
+          <span class="listing-sender">posted by Aisha K.</span>
+          <span class="listing-source">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+            from WA group
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /listing-grid -->
+</div><!-- /page -->
+</div><!-- /board-view -->
+
+
+<!-- ══════════════════════════════════════════
+     DETAIL VIEW
+══════════════════════════════════════════ -->
+<div id="detail-view">
+<div class="page" style="max-width:700px;">
+
+  <a class="back-link" onclick="showBoard()">&#8592; All listings</a>
+
+  <div id="detail-badge" class="detail-badge"></div>
+  <div id="detail-title" class="detail-title"></div>
+  <div class="detail-meta">
+    <span id="detail-freshness"></span>
+    <span id="detail-wa-pill" class="wa-pill">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L0 24l6.335-1.654A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.805 9.805 0 01-4.99-1.366l-.356-.213-3.762.982.999-3.653-.234-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+      Posted via TAMU WhatsApp group
+    </span>
+  </div>
+
+  <div class="card">
+    <div class="section">
+      <div class="section-heading">Details</div>
+      <table class="detail-table">
+        <tr><td class="dl-label">Price</td><td class="dl-val" id="d-price"></td></tr>
+        <tr><td class="dl-label">Available</td><td class="dl-val" id="d-avail"></td></tr>
+        <tr><td class="dl-label">End date</td><td class="dl-val" id="d-end"></td></tr>
+        <tr><td class="dl-label">Bedrooms</td><td class="dl-val" id="d-beds"></td></tr>
+        <tr><td class="dl-label">Bathrooms</td><td class="dl-val" id="d-baths"></td></tr>
+        <tr><td class="dl-label">Posted by</td><td class="dl-val" id="d-sender"></td></tr>
+      </table>
+    </div>
+    <div class="section">
+      <div class="section-heading">Amenities</div>
+      <div class="amenities">
+        <span class="amenity-pill">In-unit W/D</span>
+        <span class="amenity-pill">Pool</span>
+        <span class="amenity-pill">Gym</span>
+        <span class="amenity-pill">Pet friendly</span>
+        <span class="amenity-pill">Furnished</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth gate — improved -->
+  <div class="auth-gate">
+    <div class="auth-gate-icon">📱</div>
+    <div class="auth-gate-title">Verify to see contact info</div>
+    <div class="auth-gate-body">
+      This listing was posted by a real TAMU student in a private WhatsApp group.
+      We verify phone numbers to keep the board spam-free and to make sure
+      the poster only hears from legit students.
+    </div>
+    <div class="auth-gate-trust">
+      <span class="check">✓</span>
+      <span>One-time verification &mdash; sign in with your TAMU email, then confirm your number via WhatsApp OTP. Takes about 60 seconds.</span>
+    </div>
+    <div class="auth-gate-actions">
+      <a class="btn-primary" href="#">Sign in with TAMU email</a>
+      <a class="btn-secondary" href="#">Already have an account? Sign in</a>
+    </div>
+    <div class="auth-gate-skip">Your info is never shared with third parties.</div>
+  </div>
+
+</div>
+</div><!-- /detail-view -->
+
+<script>
+  var mockData = {
+    sublease: {
+      badge: 'SUBLEASE', badgeColor: '#fff', badgeBg: '#500000',
+      title: 'The Stack — 2BR/2BA', price: '$750/mo',
+      avail: 'May 15, 2026', end: 'Aug 15, 2026',
+      beds: '2', baths: '2', sender: 'Priya S.', freshness: 'today'
+    },
+    roommate: {
+      badge: 'ROOMMATE', badgeColor: '#166534', badgeBg: '#dcfce7',
+      title: 'University Trails', price: '$580/mo',
+      avail: 'Jun 1, 2026', end: 'May 31, 2027',
+      beds: '4', baths: '4', sender: 'Marcus T.', freshness: '1d ago'
+    },
+    lease: {
+      badge: 'LEASE TRANSFER', badgeColor: '#1d4ed8', badgeBg: '#dbeafe',
+      title: 'Northgate Commons — Studio', price: '$620/mo',
+      avail: 'May 1, 2026', end: 'Jul 31, 2026',
+      beds: '—', baths: '1', sender: 'Jin L.', freshness: '3d ago'
+    }
+  };
+
+  function showDetail(type) {
+    var d = mockData[type];
+    document.getElementById('detail-badge').textContent = d.badge;
+    document.getElementById('detail-badge').style.color = d.badgeColor;
+    document.getElementById('detail-badge').style.background = d.badgeBg;
+    document.getElementById('detail-title').textContent = d.title;
+    document.getElementById('detail-freshness').textContent = d.freshness;
+    document.getElementById('d-price').textContent = d.price;
+    document.getElementById('d-avail').textContent = d.avail;
+    document.getElementById('d-end').textContent = d.end;
+    document.getElementById('d-beds').textContent = d.beds;
+    document.getElementById('d-baths').textContent = d.baths;
+    document.getElementById('d-sender').textContent = d.sender;
+    document.getElementById('board-view').style.display = 'none';
+    document.getElementById('detail-view').style.display = 'block';
+    window.scrollTo(0, 0);
+  }
+
+  function showBoard() {
+    document.getElementById('board-view').style.display = 'block';
+    document.getElementById('detail-view').style.display = 'none';
+    window.scrollTo(0, 0);
+  }
+
+  function filterChips(el) {
+    document.querySelectorAll('.chip').forEach(function(c) {
+      c.className = 'chip chip-inactive';
+    });
+    el.className = 'chip chip-active';
+  }
+</script>
+</body>
+</html>
