@@ -7,7 +7,7 @@
 
 var crypto = require('crypto');
 var { authClient } = require('../lib/supabase');
-var { isEmailWaVerified } = require('../lib/profiles');
+var { isEmailWaVerified, getPhoneForEmail } = require('../lib/profiles');
 
 var DIGEST_KEY  = process.env.DIGEST_KEY || '';
 var WA_OTP_SECRET = process.env.WA_OTP_SECRET || 'change-me-in-production';
@@ -99,6 +99,7 @@ async function optionalAuth(req, res, next) {
                 if (req.user.email) {
                     var waVerified = await isEmailWaVerified(req.user.email);
                     req.user.tier = waVerified ? 2 : 1;
+                    if (waVerified) req.user.phone = await getPhoneForEmail(req.user.email);
                 } else {
                     req.user.tier = 1;
                 }
@@ -117,6 +118,7 @@ async function optionalAuth(req, res, next) {
                 if (req.user && req.user.email) {
                     var waVerifiedRefresh = await isEmailWaVerified(req.user.email);
                     req.user.tier = waVerifiedRefresh ? 2 : 1;
+                    if (waVerifiedRefresh) req.user.phone = await getPhoneForEmail(req.user.email);
                 } else if (req.user) {
                     req.user.tier = 1;
                 }
