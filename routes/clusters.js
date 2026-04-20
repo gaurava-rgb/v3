@@ -251,9 +251,10 @@ router.get('/clusters', optionalAuth, async function(req, res) {
                 }
             }
 
-            var leavingCount = leaving.length;
-            var arrivingCount = arriving.length;
-            var othersCount = others.length;
+            var leavingCount = 0, arrivingCount = 0, othersCount = 0;
+            for (var pi = 0; pi < leaving.length; pi++) leavingCount += leaving[pi].offers.length + leaving[pi].needs.length;
+            for (var pi = 0; pi < arriving.length; pi++) arrivingCount += arriving[pi].offers.length + arriving[pi].needs.length;
+            for (var pi = 0; pi < others.length; pi++) othersCount += others[pi].offers.length + others[pi].needs.length;
             var summaryParts = [];
             if (leavingCount > 0) summaryParts.push(leavingCount + ' leaving');
             if (arrivingCount > 0) summaryParts.push(arrivingCount + ' arriving');
