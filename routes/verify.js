@@ -28,10 +28,12 @@ router.get('/verify/wa', optionalAuth, async function(req, res) {
     if (!req.user) return res.redirect('/login');
 
     var email = req.user.email || '';
+    var returnTo = /^\/[a-zA-Z0-9/_-]*$/.test(req.query.returnTo || '') ? req.query.returnTo : '/clusters';
+
     // phone-session users may not have email — if so we can't proceed
     if (!email && req.user.auth_type === 'phone') {
         // Already phone-verified; redirect them back
-        return res.redirect('/clusters');
+        return res.redirect(returnTo);
     }
 
     try {
@@ -42,7 +44,7 @@ router.get('/verify/wa', optionalAuth, async function(req, res) {
 
         var waLink = 'https://wa.me/' + BOT_WA_NUMBER + '?text=verify+' + token;
 
-        res.send(renderWaVerifyPage(token, waLink));
+        res.send(renderWaVerifyPage(token, waLink, returnTo));
     } catch (err) {
         console.error('[WA-Verify] createVerifyToken error:', err.message);
         res.status(500).send('<p>Something went wrong. Please try again.</p>');
@@ -114,7 +116,8 @@ router.get('/api/wa-verify-status', async function(req, res) {
 
 // ── HTML renderer ─────────────────────────────────────────────────────────────
 
-function renderWaVerifyPage(token, waLink) {
+function renderWaVerifyPage(token, waLink, returnTo) {
+    returnTo = returnTo || '/clusters';
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -389,7 +392,7 @@ function renderWaVerifyPage(token, waLink) {
     </div>
     <p class="success-title">WhatsApp verified!</p>
     <p class="success-sub">Your number is now linked. You can view contact info on all ride listings.</p>
-    <a class="btn-go" href="/clusters">Go to Rides Board &rarr;</a>
+    <a class="btn-go" href="${returnTo}">Go to Rides Board &rarr;</a>
   </div>
 
 </div>
@@ -447,6 +450,7 @@ function renderWaVerifyPage(token, waLink) {
     clearInterval(countTimer);
     waitingEl.classList.remove('visible');
     successEl.classList.add('visible');
+    setTimeout(function() { window.location = ${JSON.stringify(returnTo)}; }, 2000);
   }
 
   function poll() {

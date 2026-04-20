@@ -292,7 +292,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         authHtml = '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see contact details</div>';
     } else if (tier === 1) {
         authHtml = '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail || '') + '</span>' +
-            ' &middot; <a href="/verify/wa" class="verified-badge-pending">Verify WhatsApp</a>' +
+            ' &middot; <a href="/verify/wa?returnTo=/clusters" class="verified-badge-pending">Verify WhatsApp</a>' +
             ' &middot; <a href="/logout">Sign out</a></div>';
     } else {
         authHtml = '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail || '') + '</span>' +
@@ -308,7 +308,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '</div>';
     } else if (tier === 1) {
         bannerHtml = '<div class="auth-banner email-only" id="auth-banner">' +
-            '<span>&#128241; Verify your WhatsApp number to see full names and contact info. <a href="/verify/wa">Verify now &rarr;</a></span>' +
+            '<span>&#128241; Verify your WhatsApp number to see full names and contact info. <a href="/verify/wa?returnTo=/clusters">Verify now &rarr;</a></span>' +
             '<button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'" aria-label="Dismiss">&times;</button>' +
         '</div>';
     } else {
