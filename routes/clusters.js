@@ -346,6 +346,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
         '<title>Aggie Connect — Ride Clusters</title>\n' +
         '<style>\n' + CSS + '\n</style>\n</head>\n<body>\n' +
+        '<a href="/housing" class="page-switch-btn" title="Browse housing listings">&#127968; Housing</a>\n' +
         '<div class="container">\n' +
         '<div class="hero"><h1>Aggie Connect</h1>' +
         '<p class="subtitle">' + subtitle + '</p>' +
@@ -501,6 +502,8 @@ var CSS = [
 '.wa-contact-btn { display: inline-flex; align-items: center; gap: 5px; background: #25D366; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px; text-decoration: none; white-space: nowrap; flex-shrink: 0; transition: background 0.15s; }',
 '.wa-contact-btn:hover { background: #1da851; }',
 '.wa-contact-btn svg { flex-shrink: 0; }',
+'.page-switch-btn { position: fixed; top: 14px; right: 16px; z-index: 300; display: inline-flex; align-items: center; gap: 5px; background: var(--card); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 99px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: box-shadow 0.15s, border-color 0.15s; white-space: nowrap; }',
+'.page-switch-btn:hover { border-color: #ccc; box-shadow: 0 3px 12px rgba(0,0,0,0.12); color: var(--text); }',
 '.footer { text-align: center; padding: 16px 0; font-size: 11px; color: #ccc; border-top: 1px solid #eee; margin-top: 20px; }',
 '@media (max-width: 700px) {',
 '  .container { padding: 8px 8px 32px; }',
