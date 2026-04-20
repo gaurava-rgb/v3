@@ -21,6 +21,21 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - TZ: America/Chicago (set in ecosystem.config.js)
 - Live: ridesplit.app
 - Deploy: `git push && ssh agconnect "cd ~/aggieconnect-v3 && git pull && pm2 restart ecosystem.config.js"`
+- `v3_requests.raw_message` — stores original WA text (used in clusters cards)
+- `v3_housing.message_text` — stores original WA text for housing listings (shown in full, no truncation)
+
+## /clusters Page
+- T0 anon: names→"Someone", message→blurred placeholder (sign-in text), group name hidden
+- T1 email: names→"Someone", message+group shown, WA verify nudge banner
+- T2 WA verified: full names, raw message, group, green WA Message button (wa.me link); hidden on own posts
+- Person counts (leaving/arriving/other) = people, not cluster count
+- Sticky "🏠 Housing" pill button top-right links to /housing
+- `/verify/wa` supports `?returnTo=` param; auto-redirects 2s after success
+
+## /housing Page
+- T2 contact row: phone + green WA Message button (wa.me link)
+- Sticky "🚗 Rides" pill button top-right links to /clusters
+- message_text shown in full (no 200-char truncation)
 
 ## Display
 - Always show timestamps in Central US time, never raw UTC
