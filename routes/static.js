@@ -70,7 +70,7 @@ router.get('/faq', async function(req, res) {
         '<div class="faq-q">1. What is this website?</div>',
         '<p class="faq-a">Hi, I made this to track groups on WhatsApp that I am in. I see a lot of messages across all these groups for tracking ride requests. It\'s hard to track who is going when, etc. I hope this helps, especially next week (spring break).</p>',
         '<div class="faq-q">2. How to use this?</div>',
-        '<p class="faq-a">For now, find someone with whom you can split a ride on a date you like. If you login with your <strong>@tamu.edu</strong> email, you can see their details to contact them.</p>',
+        '<p class="faq-a">Find someone going your way on a date you like. Sign in with your email, then verify your phone number via WhatsApp to unlock full names, phone numbers, and a direct WhatsApp button to contact them.</p>',
         '<div class="faq-q">3. Who is it for?</div>',
         '<p class="faq-a">Aggies only \u2014 You can only log in by verifying your <strong>@tamu.edu</strong> email. It was the simplest way I could add authentication and determine who actually sees our data.</p>',
         '<div class="faq-q">4. Which groups are being tracked?</div>',
