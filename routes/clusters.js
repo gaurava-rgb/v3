@@ -91,14 +91,31 @@ function personHtml(req, tier, userPhone) {
         }
     }
 
+    var msgHtml = '';
+    if (tier === 0) {
+        msgHtml = '<div class="person-msg" style="filter:blur(5px);user-select:none;pointer-events:none;cursor:default;" aria-hidden="true">' +
+            'Sign in with @tamu.edu to see the original message<br>' +
+            'You need to be verified to access this data' +
+            '</div>';
+    } else if (msg) {
+        msgHtml = '<div class="person-msg">&ldquo;' + msg + '&rdquo;</div>';
+    }
+
+    var metaHtml = '';
+    if (tier > 0) {
+        metaHtml = '<div class="person-meta">' + (group ? 'via ' + group : '') + (sent ? ' &middot; sent ' + sent : '') + '</div>';
+    } else {
+        metaHtml = '<div class="person-meta">' + (sent ? 'sent ' + sent : '') + '</div>';
+    }
+
     return '<div class="person-card ' + typeClass + '">' +
         '<div class="person-top">' +
             '<span class="type-badge ' + typeClass + '">' + badge + '</span>' +
             '<span class="person-name">' + name + yourPostBadge + '</span>' +
             '<span class="person-depart">' + (req.ride_plan_time ? timeStr : '&mdash;') + '</span>' +
         '</div>' +
-        (msg ? '<div class="person-msg">"' + msg + '"</div>' : '') +
-        '<div class="person-meta">via ' + group + (sent ? ' &middot; sent ' + sent : '') + '</div>' +
+        msgHtml +
+        metaHtml +
         phoneHtml +
     '</div>';
 }
