@@ -16,7 +16,7 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - `middleware/auth.js` — optionalAuth, getUserTier (T0/T1/T2)
 
 ## Key Facts
-- Supabase tables: `v3_requests`, `v3_matches`, `v3_message_log`, `outbound_queue`, `wa_contacts`, `monitored_groups`, `user_profiles`, `wa_verify_tokens`, `wa_otp_codes`
+- Supabase tables: `v3_requests`, `v3_matches`, `v3_message_log`, `outbound_queue`, `wa_contacts`, `monitored_groups`, `user_profiles`, `wa_verify_tokens`, `wa_otp_codes`, `wa_click_log`, `card_expand_log`
 - PM2 processes: `aggie-v3-bot`, `aggie-v3-dash` (port 3004), `aggie-v3-monitor` (port 3005)
 - TZ: America/Chicago (set in ecosystem.config.js)
 - Live: ridesplit.app
@@ -36,6 +36,13 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - T2 contact row: phone + green WA Message button (wa.me link)
 - Sticky "🚗 Rides" pill button top-right links to /clusters
 - message_text shown in full (no 200-char truncation)
+
+## Analytics
+- `POST /log-expand` — no auth gate; logs card expands to `card_expand_log` (page, listing_slug, origin, destination, ride_date, user_email, phone)
+- `POST /log-click` — auth required; logs WA button clicks to `wa_click_log` (phone=contact clicked, page, user_email)
+- sendBeacon calls use `new Blob([JSON.stringify(data)], {type:'application/json'})` — plain string body is ignored by Express JSON parser
+- `lib/profiles.js:getPhoneForEmail()` — fetches viewer phone from user_profiles for T2 email-session users
+- `middleware/auth.js` sets `req.user.phone` for T2 email-session users (not just wa_phone cookie users)
 
 ## Display
 - Always show timestamps in Central US time, never raw UTC
