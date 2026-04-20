@@ -352,7 +352,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '<div class="container">\n' +
         '<div class="hero"><h1>Aggie Connect</h1>' +
         '<p class="subtitle">' + subtitle + '</p>' +
-        '<p class="tagline">Find someone going your way. Updated in real time.</p>' +
+        '<p class="tagline">Find someone going your way. Updated in real time from WhatsApp groups. <a href="/faq">FAQs &mdash; how, why, what?</a></p>' +
         authHtml +
         '</div>\n' +
         bannerHtml +
@@ -381,7 +381,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         // Date blocks
         dateBlocksHtml +
 
-        '<div class="footer">' + totalCount + ' total requests &middot; ' + groupCount + ' groups monitored &middot; v3.6</div>\n' +
+        '<div class="footer">' + totalCount + ' total requests &middot; ' + groupCount + ' groups monitored &middot; <a href="/faq">FAQ</a> &middot; <a href="/terms">Terms</a> &middot; v3.8</div>\n' +
         '</div>\n<script>var _userEmail=' + JSON.stringify(userEmail||'') + ';var _userPhone=' + JSON.stringify(userPhone||'') + ';</script>\n<script>\n' + JS + '\n</script>\n</body>\n</html>';
 }
 
@@ -402,6 +402,8 @@ var CSS = [
 '.hero .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }',
 '.hero .subtitle strong { color: var(--text); }',
 '.hero .tagline { font-size: 13px; color: var(--text-muted); margin-top: 4px; }',
+'.hero .tagline a { color: var(--maroon); text-decoration: none; }',
+'.hero .tagline a:hover { text-decoration: underline; }',
 '.auth-link { font-size: 12px; color: var(--text-muted); margin-top: 6px; }',
 '.auth-link a { color: var(--maroon); text-decoration: none; font-weight: 600; }',
 '.auth-link a:hover { text-decoration: underline; }',
@@ -507,6 +509,8 @@ var CSS = [
 '.page-switch-btn { position: fixed; top: 14px; right: 16px; z-index: 300; display: inline-flex; align-items: center; gap: 5px; background: var(--card); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 99px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: box-shadow 0.15s, border-color 0.15s; white-space: nowrap; }',
 '.page-switch-btn:hover { border-color: #ccc; box-shadow: 0 3px 12px rgba(0,0,0,0.12); color: var(--text); }',
 '.footer { text-align: center; padding: 16px 0; font-size: 11px; color: #ccc; border-top: 1px solid #eee; margin-top: 20px; }',
+'.footer a { color: #aaa; text-decoration: none; }',
+'.footer a:hover { text-decoration: underline; }',
 '@media (max-width: 700px) {',
 '  .container { padding: 8px 8px 32px; }',
 '  .hero h1 { font-size: 18px; }',
