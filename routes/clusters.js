@@ -54,7 +54,7 @@ function clusterSummary(cluster, tier) {
         var o = offers[0];
         var name = tier >= 2 ? escHtml(displayName(o, true)) : 'Someone';
         var timeStr = o.ride_plan_time ? ' at ' + fmtTime(o.ride_plan_time) : '';
-        var seats = o.original_message && o.original_message.match(/(\d)\s*seat/i);
+        var seats = o.raw_message && o.raw_message.match(/(\d)\s*seat/i);
         var seatStr = seats ? ' with ' + seats[1] + ' seats' : '';
         if (needs.length > 0) {
             return '<strong>' + name + '</strong> is driving' + timeStr + seatStr +
@@ -71,7 +71,7 @@ function personHtml(req, tier, userPhone) {
     var badge = isOffer ? '&#128663; Offering' : '&#9995; Looking';
     var name = tier >= 2 ? escHtml(displayName(req, true)) : 'Someone';
     var timeStr = req.ride_plan_time ? fmtTime(req.ride_plan_time) : '&mdash;';
-    var msg = escHtml(req.original_message || '');
+    var msg = escHtml(req.raw_message || '');
     var group = escHtml(req.source_group_name || req.source_group || '');
     var sent = req.created_at ? formatMsgTime(req.created_at) : '';
 
