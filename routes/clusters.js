@@ -6,7 +6,7 @@
 var express = require('express');
 var router = express.Router();
 var { readClient } = require('../lib/supabase');
-var { escHtml, formatDate, formatTime, formatMsgTime, buildClusters, displayName } = require('../lib/helpers');
+var { escHtml, formatDate, formatTime, formatMsgTime, buildClusters, displayName, GA_TAG } = require('../lib/helpers');
 var { filterActiveRequests, buildTestGroupSet } = require('../lib/dateFilter');
 var { optionalAuth, getUserTier } = require('../middleware/auth');
 
@@ -165,7 +165,7 @@ function clusterHtml(cluster, direction, tier, userPhone) {
     '</article>';
 }
 
-router.get('/clusters', optionalAuth, async function(req, res) {
+router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
     try {
         var tier = req.user ? req.user.tier : 0;
         var userPhone = req.user && req.user.phone ? req.user.phone.replace(/\D/g,'') : null;
@@ -344,6 +344,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
     }
 
     return '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
+        GA_TAG + '\n' +
         '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
         '<title>Aggie Connect — Ride Clusters</title>\n' +
         '<style>\n' + CSS + '\n</style>\n</head>\n<body>\n' +

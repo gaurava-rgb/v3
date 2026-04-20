@@ -10,7 +10,7 @@ var { renderDateTable } = require('../lib/views');
 var { filterActiveRequests, buildTestGroupSet } = require('../lib/dateFilter');
 var { optionalAuth } = require('../middleware/auth');
 
-router.get('/', optionalAuth, async function(req, res) {
+router.get('/old-home', optionalAuth, async function(req, res) {
     try {
         var _now = new Date();
         var today = [_now.getFullYear(), String(_now.getMonth()+1).padStart(2,'0'), String(_now.getDate()).padStart(2,'0')].join('-');
