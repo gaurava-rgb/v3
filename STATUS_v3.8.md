@@ -1,0 +1,163 @@
+# Aggie Connect v3 — Project Status
+**Version:** 1.2 | **Date:** Apr 20, 2026 | **App version:** 3.8.0
+
+Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
+
+---
+
+## Live URLs
+- ridesplit.app — public rides board
+- ridesplit.app/housing — housing board (162+ listings)
+- ridesplit.app/clusters — trip clustering view
+- ridesplit.app/digest — admin digest (password-protected)
+- Port 3004: Express dashboard | Port 3005: PM2 monitor
+
+---
+
+## Architecture
+
+```
+WhatsApp Groups
+    → bot.js (Baileys linked device)
+    → parser.js (OpenRouter LLM)
+    → db.js (Supabase CRUD)
+    → matcher.js (need↔offer matching)
+    → v3_requests, v3_matches, v3_housing
+
+User Browser
+    → dashboard.js (Express, 3 route groups)
+    → lib/views.js (server-side HTML)
+    → Supabase read queries
+```
+
+**Core files:**
+
+| File | Size | Purpose |
+|------|------|---------|
+| bot.js | 24.9 KB | Baileys WA client, message processing, LID→phone mapping, OTP poller |
+| parser.js | 8.4 KB | OpenRouter LLM parse: intent, dates, times, locations, housing fields |
+| db.js | 12.9 KB | Supabase CRUD, dedup (SHA256 hash), contact backfill |
+| matcher.js | 5.8 KB | need↔offer matching, scoring (date/location/time/origin), quality tiers |
+| normalize.js | 2.3 KB | 40+ location variants → 12 standard forms, nearby-pair scoring |
+| dashboard.js | 1.6 KB | Express: mounts all routes + middleware |
+| monitor.js | 12.2 KB | PM2 health dashboard (port 3005) |
+| lib/views.js | ~75 KB | All HTML rendering (rides board, housing, auth pages, profile) |
+| lib/housing.js | — | upsertHousing(), getActiveListings(), getListingBySlug(), 60s/5min cache |
+| lib/profiles.js | — | upsertProfile(), linkEmailToProfile() |
+| lib/wa-otp.js | — | OTP gen/verify/rate-limit (delivery via outbound_queue) |
+
+---
+
+## Supabase Tables
+
+| Table | Key Columns | Purpose |
+|-------|-------------|---------|
+| v3_requests | id, source_contact, sender_name, type, category, destination, ride_plan_date, ride_plan_time, date_fuzzy, possible_dates, request_hash, status | All ride/help requests from WA |
+| v3_matches | id, need_id, offer_id, score, match_quality, notified | Matched need↔offer pairs |
+| v3_message_log | wa_message_id, source_group, parsed_data, error | Every WA message + LLM parse result |
+| v3_housing | id, slug (unique), source_contact, poster_phone, contact_phone, contact_info, listing_type, location, price, bedrooms, bathrooms, amenities, available_date, message_hash, active | Housing listings |
+| wa_contacts | lid (PK), phone, name | LID→phone mappings (resolved from WA events) |
+| user_profiles | id, phone (unique), display_name, email, email_verified, wa_name | One row per verified user |
+| wa_otp_codes | phone, code_hash, attempts, used, expires_at | WA phone OTP codes (hashed) |
+| outbound_queue | contact, channel, message_type, payload, status, related_request_id | Pending/sent outbound messages |
+| monitored_groups | group_id, group_name, active, is_test | WA groups to listen to |
+
+| wa_verify_tokens | id, token (unique), email, phone, verified, created_at, expires_at | WA tap-to-verify tokens |
+
+---
+
+## PM2 Processes
+
+| Process | Script | Port | Notes |
+|---------|--------|------|-------|
+| aggie-v3-bot | bot.js | — | Max 10 restarts, 5s delay |
+| aggie-v3-dash | dashboard.js | 3004 | Max 10 restarts, 3s delay |
+| aggie-v3-monitor | monitor.js | 3005 | Max 10 restarts, 3s delay |
+
+All: `TZ=America/Chicago`, `NODE_ENV=production`
+
+---
+
+## Auth System
+
+Three session types, all coexist:
+
+**1. Email (Supabase OTP)**
+- `/login` → email → 6-digit OTP via Supabase → `access_token` cookie (1hr) + `refresh_token` (7d)
+- `req.user.email` available
+
+**2. WhatsApp Phone OTP**
+- `/login/phone` → phone → OTP sent via WA bot from outbound_queue
+- `/verify/phone` → code → hash compare → upsertProfile() → `wa_phone` cookie (HMAC-signed, 7d, stateless)
+- `req.user.phone` available, `req.user.auth_type = 'phone'`
+
+**3. Linked Profile**
+- If both email + phone sessions active → linkEmailToProfile() → user_profiles.email set
+- Profile page shows three states: unlinked | linked | phone-verified
+
+**Middleware:** `optionalAuth` checks wa_phone cookie (HMAC validate) first, then email token (Supabase call)
+
+---
+
+## Access Tiers (Current State — Sprint 11)
+
+| Tier | Condition | Rides | Housing |
+|------|-----------|-------|---------|
+| T0 anon | no session | listings/dates/destinations visible, names+phones masked | cards, location, price — contact redacted |
+| T1 email | email session | same as T0 (nudge to verify WA) | price+beds filter bar unlocked; contact still gated |
+| T2 WA verified | WA tap-to-verify done | full names, phones, "Your post" badge | contact_phone + contact_info visible |
+
+**WA verify flow:** `/verify/wa` → deep link to +1 201-322-5726 → user sends `verify <token>` → Kapso workflow `wa-verify-handler` → `POST /api/verify-wa` → `linkEmailToProfile()` → frontend poll → T2 unlocked.
+
+**Tier detection** (`middleware/auth.js`): `getUserTier()` — T2 = `auth_type==='phone'` OR email linked to profile with non-null phone.
+
+---
+
+## Sprints Completed
+
+| Sprint | Focus | Status | Key Deliverable |
+|--------|-------|--------|-----------------|
+| 1–3 | Security, Reliability, Tests | ✅ | Rate limiting, LLM retry, 51 unit tests |
+| 4 | Architecture | ✅ | Split dashboard.js → routes/ + lib/ |
+| 7 | User Profiles | ✅ | WA OTP, user_profiles, profile page |
+| 8 | Profile Editing | ✅ | Inline name edit, email linking |
+| 9 | Housing Board | ✅ | v3_housing table, /housing, /listing/:slug, WA gate |
+| 10 | Housing Polish | ✅ | Performance fix (830ms→184ms), poster_phone cache, source_contact as primary phone |
+| 11 | Unified 3-Tier Access + WA Tap-to-Verify | ✅ | T0/T1/T2 gates on rides+housing, wa_verify_tokens, /verify/wa flow via Kapso (+1 201-322-5726) |
+
+---
+
+## Open / Planned
+
+| Item | Sprint | Priority | Notes |
+|------|--------|----------|-------|
+| ~~Kapso workflow~~ | ~~11~~ | ~~P0~~ | ~~DONE — wa-verify-handler deployed, trigger active on +1 201-322-5726~~ |
+| Outbound match notifications | 12 | P1 | outbound_queue ready, sender not built, needs new PM2 process |
+| Kapso bot flows (ride auth, match alerts) | 13 | P2 | WABA live (+1 201-322-5726, CONNECTED). Build workflows in Kapso. |
+| Request lifecycle (auto-close, expiry) | 14 | P2 | Requests stay open forever currently |
+| Housing expiry notifications | 14 | P2 | H14 use case |
+| Help category matching | Backlog | P3 | Parsed but matcher ignores it |
+| Retroactive match notifications | Backlog | P3 | R17 use case |
+
+---
+
+## Known Gaps / Debt
+
+- `outbound_queue` — 6mo old, fully schemed, only used for OTP. Match notifications never implemented.
+- `MATCH_THRESHOLD` env — exists, never tuned in prod (default 0.5)
+- `wa_otp_codes` — superseded by `wa_verify_tokens` (Sprint 11). Old table still exists, can be dropped later.
+- `wa_otp_codes` — superseded by `wa_verify_tokens`. Old table still exists, can drop later.
+- Package version — updated to 3.8.0, still manual
+- monitor.js (port 3005) not routed through dashboard.js — accessible only direct
+- No telemetry on match outcome quality (matches created but no feedback loop)
+- Bryan→College Station normalization edge case still open
+
+---
+
+## Deploy
+
+```bash
+git push && ssh agconnect "cd ~/aggieconnect-v3 && git pull && pm2 restart ecosystem.config.js"
+```
+
+Auth state: `.v3_auth/` — **never delete**
