@@ -7,6 +7,7 @@
 
 var crypto = require('crypto');
 var { authClient } = require('../lib/supabase');
+var { isEmailWaVerified } = require('../lib/profiles');
 
 var DIGEST_KEY  = process.env.DIGEST_KEY || '';
 var WA_OTP_SECRET = process.env.WA_OTP_SECRET || 'change-me-in-production';
@@ -67,6 +68,10 @@ function clearAuthCookies(res) {
     res.clearCookie('refresh_token', { path: '/' });
 }
 
+function getUserTier(user) {
+    return user && user.tier != null ? user.tier : 0;
+}
+
 async function optionalAuth(req, res, next) {
     req.user = null;
 
@@ -75,7 +80,7 @@ async function optionalAuth(req, res, next) {
     if (phoneToken) {
         var phoneData = parsePhoneSession(phoneToken);
         if (phoneData) {
-            req.user = { phone: phoneData.phone, id: phoneData.phone, auth_type: 'phone' };
+            req.user = { phone: phoneData.phone, id: phoneData.phone, auth_type: 'phone', tier: 2 };
             return next();
         }
         clearPhoneSessionCookie(res); // clear invalid/expired cookie
@@ -91,6 +96,12 @@ async function optionalAuth(req, res, next) {
             var result = await authClient.auth.getUser(accessToken);
             if (result.data && result.data.user) {
                 req.user = result.data.user;
+                if (req.user.email) {
+                    var waVerified = await isEmailWaVerified(req.user.email);
+                    req.user.tier = waVerified ? 2 : 1;
+                } else {
+                    req.user.tier = 1;
+                }
                 return next();
             }
         } catch (e) { /* token invalid, try refresh */ }
@@ -103,6 +114,12 @@ async function optionalAuth(req, res, next) {
                 var session = refreshResult.data.session;
                 setAuthCookies(res, session.access_token, session.refresh_token);
                 req.user = refreshResult.data.user;
+                if (req.user && req.user.email) {
+                    var waVerifiedRefresh = await isEmailWaVerified(req.user.email);
+                    req.user.tier = waVerifiedRefresh ? 2 : 1;
+                } else if (req.user) {
+                    req.user.tier = 1;
+                }
                 return next();
             }
         } catch (e) {
@@ -139,5 +156,6 @@ module.exports = {
     setPhoneSessionCookie,
     clearPhoneSessionCookie,
     optionalAuth,
-    digestAuth
+    digestAuth,
+    getUserTier
 };

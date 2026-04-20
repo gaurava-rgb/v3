@@ -8,7 +8,7 @@ var router = express.Router();
 var { readClient } = require('../lib/supabase');
 var { escHtml, formatDate, formatTime, formatMsgTime, buildClusters, displayName } = require('../lib/helpers');
 var { filterActiveRequests, buildTestGroupSet } = require('../lib/dateFilter');
-var { optionalAuth } = require('../middleware/auth');
+var { optionalAuth, getUserTier } = require('../middleware/auth');
 
 // ── College Station is the hub ──────────────────────────────────────────
 var CS = 'College Station';
@@ -47,12 +47,12 @@ function timeRange(members) {
     return times[0];
 }
 
-function clusterSummary(cluster, isLoggedIn) {
+function clusterSummary(cluster, tier) {
     var offers = cluster.offers;
     var needs = cluster.needs;
     if (offers.length > 0) {
         var o = offers[0];
-        var name = escHtml(displayName(o, isLoggedIn));
+        var name = tier >= 2 ? escHtml(displayName(o, true)) : 'Someone';
         var timeStr = o.ride_plan_time ? ' at ' + fmtTime(o.ride_plan_time) : '';
         var seats = o.original_message && o.original_message.match(/(\d)\s*seat/i);
         var seatStr = seats ? ' with ' + seats[1] + ' seats' : '';
@@ -65,28 +65,45 @@ function clusterSummary(cluster, isLoggedIn) {
     return needs.length + ' rider' + (needs.length > 1 ? 's' : '') + ' headed this way &mdash; no driver yet';
 }
 
-function personHtml(req, isLoggedIn) {
+function personHtml(req, tier, userPhone) {
     var isOffer = req.request_type === 'offer';
     var typeClass = isOffer ? 'offer' : 'need';
     var badge = isOffer ? '&#128663; Offering' : '&#9995; Looking';
-    var name = escHtml(displayName(req, isLoggedIn));
+    var name = tier >= 2 ? escHtml(displayName(req, true)) : 'Someone';
     var timeStr = req.ride_plan_time ? fmtTime(req.ride_plan_time) : '&mdash;';
     var msg = escHtml(req.original_message || '');
     var group = escHtml(req.source_group_name || req.source_group || '');
     var sent = req.created_at ? formatMsgTime(req.created_at) : '';
 
+    var yourPostBadge = '';
+    if (tier >= 2 && userPhone && req.source_contact) {
+        var reqPhone = req.source_contact.replace(/\D/g, '');
+        if (reqPhone && reqPhone === userPhone) {
+            yourPostBadge = '<span class="pill pill-your-post">&#11088; Your post</span>';
+        }
+    }
+
+    var phoneHtml = '';
+    if (tier >= 2 && req.source_contact) {
+        var displayPhone = req.source_contact.replace(/\D/g, '');
+        if (displayPhone) {
+            phoneHtml = '<div class="person-meta">&#128222; ' + escHtml(displayPhone) + '</div>';
+        }
+    }
+
     return '<div class="person-card ' + typeClass + '">' +
         '<div class="person-top">' +
             '<span class="type-badge ' + typeClass + '">' + badge + '</span>' +
-            '<span class="person-name">' + name + '</span>' +
+            '<span class="person-name">' + name + yourPostBadge + '</span>' +
             '<span class="person-depart">' + (req.ride_plan_time ? timeStr : '&mdash;') + '</span>' +
         '</div>' +
         (msg ? '<div class="person-msg">"' + msg + '"</div>' : '') +
         '<div class="person-meta">via ' + group + (sent ? ' &middot; sent ' + sent : '') + '</div>' +
+        phoneHtml +
     '</div>';
 }
 
-function clusterHtml(cluster, direction, isLoggedIn) {
+function clusterHtml(cluster, direction, tier, userPhone) {
     var allMembers = cluster.offers.concat(cluster.needs);
     var from = escHtml(cluster.origin || '?');
     var to = escHtml(cluster.destination || '?');
@@ -104,15 +121,15 @@ function clusterHtml(cluster, direction, isLoggedIn) {
 
     var personCards = '';
     // offers first, then needs
-    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], isLoggedIn);
-    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], isLoggedIn);
+    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone);
+    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone);
 
     return '<article class="cluster ' + direction + '" data-from="' + from + '" data-to="' + to + '" tabindex="0" role="button" aria-expanded="false">' +
         '<div class="cluster-head" onclick="toggleCluster(this.parentElement)">' +
             '<div class="cluster-info">' +
                 '<div class="cluster-route">' + from + ' <span class="cluster-arrow">&rarr;</span> ' + to + '</div>' +
                 '<div class="cluster-meta">' + metaPills + '</div>' +
-                '<div class="cluster-summary">' + clusterSummary(cluster, isLoggedIn) + '</div>' +
+                '<div class="cluster-summary">' + clusterSummary(cluster, tier) + '</div>' +
                 '<div class="expand-hint">Tap to see ' + totalCount + ' ' + (totalCount === 1 ? 'person' : 'people') + '</div>' +
             '</div>' +
             '<span class="cluster-chevron">&#9656;</span>' +
@@ -123,7 +140,8 @@ function clusterHtml(cluster, direction, isLoggedIn) {
 
 router.get('/clusters', optionalAuth, async function(req, res) {
     try {
-        var isLoggedIn = !!req.user;
+        var tier = req.user ? req.user.tier : 0;
+        var userPhone = req.user && req.user.phone ? req.user.phone.replace(/\D/g,'') : null;
         var userEmail = req.user ? req.user.email : '';
         var _now = new Date();
         var today = [_now.getFullYear(), String(_now.getMonth()+1).padStart(2,'0'), String(_now.getDate()).padStart(2,'0')].join('-');
@@ -232,21 +250,21 @@ router.get('/clusters', optionalAuth, async function(req, res) {
             if (leaving.length > 0) {
                 dateBlocksHtml += '<div class="direction-label leaving">&#8593; Leaving College Station <span class="direction-count">(' + leavingCount + ')</span></div>';
                 for (var li = 0; li < leaving.length; li++) {
-                    dateBlocksHtml += clusterHtml(leaving[li], 'leaving', isLoggedIn);
+                    dateBlocksHtml += clusterHtml(leaving[li], 'leaving', tier, userPhone);
                 }
             }
 
             if (arriving.length > 0) {
                 dateBlocksHtml += '<div class="direction-label arriving">&#8595; Coming to College Station <span class="direction-count">(' + arrivingCount + ')</span></div>';
                 for (var ari = 0; ari < arriving.length; ari++) {
-                    dateBlocksHtml += clusterHtml(arriving[ari], 'arriving', isLoggedIn);
+                    dateBlocksHtml += clusterHtml(arriving[ari], 'arriving', tier, userPhone);
                 }
             }
 
             if (others.length > 0) {
                 dateBlocksHtml += '<div class="direction-label others">&#8646; Other Routes <span class="direction-count">(' + othersCount + ')</span></div>';
                 for (var oi = 0; oi < others.length; oi++) {
-                    dateBlocksHtml += clusterHtml(others[oi], 'other', isLoggedIn);
+                    dateBlocksHtml += clusterHtml(others[oi], 'other', tier, userPhone);
                 }
             }
 
@@ -261,23 +279,41 @@ router.get('/clusters', optionalAuth, async function(req, res) {
             '</strong> across <strong>' + activeGroupCount + ' WhatsApp group' + (activeGroupCount !== 1 ? 's' : '') +
             '</strong> this week';
 
-        res.send(PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, activeGroupCount, isLoggedIn, userEmail));
+        res.send(PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, activeGroupCount, tier, userEmail, userPhone));
     } catch (err) {
         console.error('[Clusters] Error:', err);
         res.status(500).send('Internal error');
     }
 });
 
-function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, groupCount, isLoggedIn, userEmail) {
-    var authHtml = isLoggedIn
-        ? '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail) + '</span> &middot; <a href="/logout">Sign out</a></div>'
-        : '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see full names</div>';
+function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, groupCount, tier, userEmail, userPhone) {
+    var authHtml;
+    if (tier === 0) {
+        authHtml = '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see contact details</div>';
+    } else if (tier === 1) {
+        authHtml = '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail || '') + '</span>' +
+            ' &middot; <a href="/verify/wa" class="verified-badge-pending">Verify WhatsApp</a>' +
+            ' &middot; <a href="/logout">Sign out</a></div>';
+    } else {
+        authHtml = '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail || '') + '</span>' +
+            ' <span class="verified-badge">&#10003; WA Verified</span>' +
+            ' &middot; <a href="/logout">Sign out</a></div>';
+    }
 
-    var bannerHtml = isLoggedIn ? '' :
-        '<div class="auth-banner" id="auth-banner">' +
-            '<span>&#128274; Names are redacted. <a href="/login">Sign in with your @tamu.edu email</a> to see full contact details.</span>' +
+    var bannerHtml;
+    if (tier === 0) {
+        bannerHtml = '<div class="auth-banner anon" id="auth-banner">' +
+            '<span>&#128274; Names are hidden. <a href="/login">Sign in with @tamu.edu</a> to get started.</span>' +
             '<button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'" aria-label="Dismiss">&times;</button>' +
         '</div>';
+    } else if (tier === 1) {
+        bannerHtml = '<div class="auth-banner email-only" id="auth-banner">' +
+            '<span>&#128241; Verify your WhatsApp number to see full names and contact info. <a href="/verify/wa">Verify now &rarr;</a></span>' +
+            '<button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'" aria-label="Dismiss">&times;</button>' +
+        '</div>';
+    } else {
+        bannerHtml = '';
+    }
 
     return '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
         '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
@@ -341,9 +377,15 @@ var CSS = [
 '.auth-link a:hover { text-decoration: underline; }',
 '.auth-email-display { font-weight: 600; color: var(--text-secondary); }',
 '.auth-banner { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 12px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; line-height: 1.45; }',
+'.auth-banner.anon { background: #fef3c7; border-color: #fde68a; color: #92400e; }',
+'.auth-banner.email-only { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }',
 '.auth-banner a { color: var(--maroon); font-weight: 700; text-decoration: none; }',
+'.auth-banner.email-only a { color: #1d4ed8; }',
 '.auth-banner a:hover { text-decoration: underline; }',
-'.auth-banner-close { margin-left: auto; background: none; border: none; font-size: 20px; cursor: pointer; color: #92400e; line-height: 1; padding: 0 4px; flex-shrink: 0; }',
+'.auth-banner-close { margin-left: auto; background: none; border: none; font-size: 20px; cursor: pointer; color: inherit; line-height: 1; padding: 0 4px; flex-shrink: 0; }',
+'.verified-badge { display: inline-flex; align-items: center; gap: 3px; background: #f0fdf4; color: #15803d; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; border: 1px solid #bbf7d0; }',
+'.verified-badge-pending { display: inline-flex; align-items: center; gap: 3px; background: #eff6ff; color: #1d4ed8; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; border: 1px solid #bfdbfe; text-decoration: none; }',
+'.pill-your-post { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }',
 '.filter-bar { position: sticky; top: 0; z-index: 18; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }',
 '.filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }',
 '.filter-row-from { display: none; }',
