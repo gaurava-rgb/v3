@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.3 | **Date:** Apr 20, 2026 | **App version:** 3.8.0
+**Version:** 1.4 | **Date:** Apr 20, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -124,6 +124,33 @@ Three session types, all coexist:
 | 9 | Housing Board | ✅ | v3_housing table, /housing, /listing/:slug, WA gate |
 | 10 | Housing Polish | ✅ | Performance fix (830ms→184ms), poster_phone cache, source_contact as primary phone |
 | 11 | Unified 3-Tier Access + WA Tap-to-Verify | ✅ | T0/T1/T2 gates on rides+housing, wa_verify_tokens, /verify/wa flow via Kapso (+1 201-322-5726) |
+| 12 | /clusters Polish + Analytics | ✅ | See Apr 20 session below |
+
+---
+
+## Sprint 12 — Apr 20, 2026 (Clusters Polish + Analytics)
+
+### /clusters fixes
+- `raw_message` bug fixed (was reading `original_message` which never existed)
+- T0 anon: message blurred (sign-in notice as actual text), group name hidden
+- T1: names masked ("Someone"), message+group visible, verify nudge banner
+- Person counts (leaving/arriving/other) = people not cluster count
+- WA Message button (green pill, wa.me link) on T2 person cards; hidden on own posts
+- `/verify/wa` auto-redirects to `returnTo` param (2s after success); clusters passes `?returnTo=/clusters`
+
+### /housing fixes
+- Full `message_text` shown (removed 200-char truncation)
+- WA Message button on T2 contact row (same style as clusters)
+
+### Cross-page nav
+- Sticky "🏠 Housing" pill top-right on /clusters
+- Sticky "🚗 Rides" pill top-right on /housing
+
+### Analytics (new Supabase tables)
+- `card_expand_log` — fires on cluster/listing expand (anon OK); columns: `page, listing_slug, origin, destination, ride_date, user_email, phone`
+- `wa_click_log` — updated: now logs `phone` (contact clicked) + `page`
+- `req.user.phone` now populated for T2 email-session users via `getPhoneForEmail()` (was always null before)
+- sendBeacon uses `Blob({type:'application/json'})` so Express JSON parser accepts it
 
 ---
 
