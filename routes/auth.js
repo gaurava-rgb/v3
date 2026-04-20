@@ -182,16 +182,37 @@ router.post('/verify/phone', async function(req, res) {
 router.post('/log-click', optionalAuth, async function(req, res) {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
     try {
-        var { route, type, date } = req.body;
+        var { route, type, date, phone, page } = req.body;
         await writeClient.from('wa_click_log').insert({
             route: route || null,
             ride_type: type || null,
             ride_date: date || null,
-            user_email: req.user.email
+            user_email: req.user.email || null,
+            phone: phone || null,
+            page: page || null
         });
         res.json({ ok: true });
     } catch (e) {
         console.error('log-click error:', e.message);
+        res.json({ ok: false });
+    }
+});
+
+router.post('/log-expand', optionalAuth, async function(req, res) {
+    try {
+        var { page, listing_slug, origin, destination, ride_date } = req.body;
+        await writeClient.from('card_expand_log').insert({
+            page: page || null,
+            listing_slug: listing_slug || null,
+            origin: origin || null,
+            destination: destination || null,
+            ride_date: ride_date || null,
+            user_email: req.user ? (req.user.email || null) : null,
+            phone: req.user ? (req.user.phone || null) : null
+        });
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('log-expand error:', e.message);
         res.json({ ok: false });
     }
 });

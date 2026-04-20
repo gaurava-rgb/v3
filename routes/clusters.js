@@ -89,7 +89,7 @@ function personHtml(req, tier, userPhone) {
         if (displayPhone) {
             var isOwnPost = userPhone && displayPhone === userPhone;
             if (!isOwnPost) {
-                waBtn = '<a class="wa-contact-btn" href="https://wa.me/' + escHtml(displayPhone) + '" target="_blank" rel="noopener noreferrer">' +
+                waBtn = '<a class="wa-contact-btn" href="https://wa.me/' + escHtml(displayPhone) + '" target="_blank" rel="noopener noreferrer" onclick="navigator.sendBeacon(\'/log-click\',JSON.stringify({phone:\'' + escHtml(displayPhone) + '\',page:\'clusters\',user_email:_userEmail}))">' +
                     '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.852L0 24l6.335-1.507A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.807 9.807 0 01-5.032-1.384l-.361-.214-3.762.895.952-3.664-.235-.376A9.808 9.808 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182c5.43 0 9.818 4.388 9.818 9.818 0 5.43-4.388 9.818-9.818 9.818z"/></svg>' +
                     'Message' +
                     '</a>';
@@ -150,7 +150,8 @@ function clusterHtml(cluster, direction, tier, userPhone) {
     for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone);
     for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone);
 
-    return '<article class="cluster ' + direction + '" data-from="' + from + '" data-to="' + to + '" tabindex="0" role="button" aria-expanded="false">' +
+    var repDate = escHtml(cluster.repDate || '');
+    return '<article class="cluster ' + direction + '" data-from="' + from + '" data-to="' + to + '" data-date="' + repDate + '" tabindex="0" role="button" aria-expanded="false">' +
         '<div class="cluster-head" onclick="toggleCluster(this.parentElement)">' +
             '<div class="cluster-info">' +
                 '<div class="cluster-route">' + from + ' <span class="cluster-arrow">&rarr;</span> ' + to + '</div>' +
@@ -380,7 +381,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         dateBlocksHtml +
 
         '<div class="footer">' + totalCount + ' total requests &middot; ' + groupCount + ' groups monitored &middot; v3.6</div>\n' +
-        '</div>\n<script>\n' + JS + '\n</script>\n</body>\n</html>';
+        '</div>\n<script>var _userEmail=' + JSON.stringify(userEmail||'') + ';var _userPhone=' + JSON.stringify(userPhone||'') + ';</script>\n<script>\n' + JS + '\n</script>\n</body>\n</html>';
 }
 
 // ── CSS (from mockup) ───────────────────────────────────────────────────
@@ -526,7 +527,7 @@ var CSS = [
 
 // ── JS (from mockup) ───────────────────────────────────────────────────
 var JS = [
-'function toggleCluster(el) { el.classList.toggle("open"); el.setAttribute("aria-expanded", el.classList.contains("open")); }',
+'function toggleCluster(el) { el.classList.toggle("open"); el.setAttribute("aria-expanded", el.classList.contains("open")); if (el.classList.contains("open")) { navigator.sendBeacon("/log-expand", JSON.stringify({page:"clusters",origin:el.getAttribute("data-from"),destination:el.getAttribute("data-to"),ride_date:el.getAttribute("data-date"),user_email:_userEmail,phone:_userPhone})); } }',
 'var activeFilters = { from: new Set(), to: new Set() };',
 'function toggleFilter(pill) { var type = pill.getAttribute("data-filter"); var city = pill.getAttribute("data-city"); if (activeFilters[type].has(city)) { activeFilters[type].delete(city); } else { activeFilters[type].add(city); } syncPills(); applyFilters(); updateFab(); }',
 'function clearFilters(type) { activeFilters[type].clear(); syncPills(); applyFilters(); updateFab(); }',

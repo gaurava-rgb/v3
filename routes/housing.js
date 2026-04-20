@@ -19,7 +19,9 @@ router.get('/housing', optionalAuth, async function(req, res) {
                 tier = waVerified ? 2 : 1;
             }
         }
-        var html = renderHousingBoard(listings, req.query.type || 'all', tier);
+        var userEmail = req.user ? (req.user.email || '') : '';
+        var userPhone = req.user ? (req.user.phone || '') : '';
+        var html = renderHousingBoard(listings, req.query.type || 'all', tier, userEmail, userPhone);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
     } catch (err) {
