@@ -9,14 +9,17 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - `db.js` — Supabase CRUD, dedup, contact resolution
 - `matcher.js` — Matches needs↔offers, scores quality (strong/medium/low)
 - `normalize.js` — Location name normalization
-- `dashboard.js` — Express: public board (/) + admin digest (/digest)
+- `dashboard.js` — Express entry point, mounts routes/ + middleware/
 - `monitor.js` — PM2 health dashboard
+- `routes/` — clusters.js, housing.js, verify.js, profile.js, auth.js
+- `lib/` — views.js (HTML), housing.js (cache), profiles.js, wa-verify.js, wa-otp.js
+- `middleware/auth.js` — optionalAuth, getUserTier (T0/T1/T2)
 
 ## Key Facts
-- Supabase tables: `v3_requests`, `v3_matches`, `v3_message_log`, `outbound_queue`, `wa_contacts`, `monitored_groups`
+- Supabase tables: `v3_requests`, `v3_matches`, `v3_message_log`, `outbound_queue`, `wa_contacts`, `monitored_groups`, `user_profiles`, `wa_verify_tokens`, `wa_otp_codes`
 - PM2 processes: `aggie-v3-bot`, `aggie-v3-dash` (port 3004), `aggie-v3-monitor` (port 3005)
 - TZ: America/Chicago (set in ecosystem.config.js)
-- Live: v3.myburrow.club
+- Live: ridesplit.app
 - Deploy: `git push && ssh agconnect "cd ~/aggieconnect-v3 && git pull && pm2 restart ecosystem.config.js"`
 
 ## Display
