@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.2 | **Date:** Apr 20, 2026 | **App version:** 3.8.0
+**Version:** 1.3 | **Date:** Apr 20, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -131,7 +131,7 @@ Three session types, all coexist:
 
 | Item | Sprint | Priority | Notes |
 |------|--------|----------|-------|
-| ~~Kapso workflow~~ | ~~11~~ | ~~P0~~ | ~~DONE — wa-verify-handler deployed, trigger active on +1 201-322-5726~~ |
+| ~~Kapso workflow + verify bugs~~ | ~~11~~ | ~~P0~~ | ~~DONE — wa-verify-handler live, linkEmailToProfile upsert fix, isEmailWaVerified multi-phone fix, user_profiles table created~~ |
 | Outbound match notifications | 12 | P1 | outbound_queue ready, sender not built, needs new PM2 process |
 | Kapso bot flows (ride auth, match alerts) | 13 | P2 | WABA live (+1 201-322-5726, CONNECTED). Build workflows in Kapso. |
 | Request lifecycle (auto-close, expiry) | 14 | P2 | Requests stay open forever currently |
@@ -147,6 +147,7 @@ Three session types, all coexist:
 - `MATCH_THRESHOLD` env — exists, never tuned in prod (default 0.5)
 - `wa_otp_codes` — superseded by `wa_verify_tokens` (Sprint 11). Old table still exists, can be dropped later.
 - `wa_otp_codes` — superseded by `wa_verify_tokens`. Old table still exists, can drop later.
+- `user_profiles` table — now created. Multi-phone supported (same email, multiple phone rows).
 - Package version — updated to 3.8.0, still manual
 - monitor.js (port 3005) not routed through dashboard.js — accessible only direct
 - No telemetry on match outcome quality (matches created but no feedback loop)
