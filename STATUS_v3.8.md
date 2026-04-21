@@ -125,6 +125,7 @@ Three session types, all coexist:
 | 10 | Housing Polish | ✅ | Performance fix (830ms→184ms), poster_phone cache, source_contact as primary phone |
 | 11 | Unified 3-Tier Access + WA Tap-to-Verify | ✅ | T0/T1/T2 gates on rides+housing, wa_verify_tokens, /verify/wa flow via Kapso (+1 201-322-5726) |
 | 12 | /clusters Polish + Analytics | ✅ | See Apr 20 session below |
+| 13 | Homepage Swap + FAQ/GA Polish | ✅ | See Apr 20 session below |
 
 ---
 
@@ -151,6 +152,26 @@ Three session types, all coexist:
 - `wa_click_log` — updated: now logs `phone` (contact clicked) + `page`
 - `req.user.phone` now populated for T2 email-session users via `getPhoneForEmail()` (was always null before)
 - sendBeacon uses `Blob({type:'application/json'})` so Express JSON parser accepts it
+
+---
+
+## Sprint 13 — Apr 20, 2026 (Homepage Swap + Polish)
+
+### Homepage
+- `/clusters` now serves `GET /` — is the homepage
+- Old homepage moved to `GET /old-home` (preserved, not deleted)
+- Rollback tag: `pre-homepage-swap` (`git checkout pre-homepage-swap -- routes/clusters.js routes/public.js lib/views.js`)
+
+### GA
+- Added `GA_TAG` to `/clusters` HTML head (was missing — only `/housing` had it)
+
+### Navigation
+- Housing page "Rides" pill: `/clusters` → `/`
+- Clusters page tagline: added FAQ link
+- Clusters footer: added FAQ + Terms links, bumped to v3.8
+
+### FAQ
+- Q2 updated to reflect T1/T2 flow (email login + WA phone verify)
 
 ---
 
