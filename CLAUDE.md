@@ -11,7 +11,7 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - `normalize.js` — Location name normalization
 - `dashboard.js` — Express entry point, mounts routes/ + middleware/
 - `monitor.js` — PM2 health dashboard
-- `routes/` — clusters.js, housing.js, verify.js, profile.js, auth.js
+- `routes/` — clusters.js (homepage + /clusters), housing.js, verify.js, profile.js, auth.js, public.js (/old-home), static.js (/faq, /terms), submit.js, digest.js
 - `lib/` — views.js (HTML), housing.js (cache), profiles.js, wa-verify.js, wa-otp.js
 - `middleware/auth.js` — optionalAuth, getUserTier (T0/T1/T2)
 
@@ -34,7 +34,7 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 
 ## /housing Page
 - T2 contact row: phone + green WA Message button (wa.me link)
-- Sticky "🚗 Rides" pill button top-right links to /clusters
+- Sticky "🚗 Rides" pill button top-right links to /
 - message_text shown in full (no 200-char truncation)
 
 ## Analytics
