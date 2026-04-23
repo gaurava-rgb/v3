@@ -10,7 +10,7 @@ var express = require('express');
 var router = express.Router();
 var { optionalAuth } = require('../middleware/auth');
 var { createVerifyToken, markTokenVerified, getTokenStatus } = require('../lib/wa-verify');
-var { linkEmailToProfile } = require('../lib/profiles');
+var { linkEmailToProfile, getProfile } = require('../lib/profiles');
 
 var KAPSO_VERIFY_SECRET = process.env.KAPSO_VERIFY_SECRET || '';
 var BOT_WA_NUMBER = '12013225726';
@@ -30,9 +30,14 @@ router.get('/verify/wa', optionalAuth, async function(req, res) {
     var email = req.user.email || '';
     var returnTo = /^\/[a-zA-Z0-9/_-]*$/.test(req.query.returnTo || '') ? req.query.returnTo : '/clusters';
 
-    // phone-session users may not have email — if so we can't proceed
+    // Phone-auth users: look up linked email from profile so "Add another number" flow works
+    if (!email && req.user.auth_type === 'phone' && req.user.phone) {
+        var profile = await getProfile(req.user.phone);
+        if (profile && profile.email) email = profile.email;
+    }
+
+    // phone-session users with no linked email can't proceed — send them back
     if (!email && req.user.auth_type === 'phone') {
-        // Already phone-verified; redirect them back
         return res.redirect(returnTo);
     }
 

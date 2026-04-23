@@ -5,7 +5,8 @@
 var express = require('express');
 var router  = express.Router();
 var { optionalAuth } = require('../middleware/auth');
-var { getProfile, updateProfileName } = require('../lib/profiles');
+var { getProfile, updateProfileName, getPhonesForEmail } = require('../lib/profiles');
+var { fetchUserListings } = require('../lib/data');
 var { renderProfilePage } = require('../lib/views');
 var { nameLimiter } = require('../middleware/rateLimiter');
 
@@ -14,17 +15,24 @@ router.get('/profile', optionalAuth, async function(req, res) {
         return res.redirect('/login/phone?next=' + encodeURIComponent('/profile'));
     }
 
-    // Phone-auth users have req.user.phone; email-auth users won't yet
     var phone = req.user.phone || null;
     var profile = phone ? await getProfile(phone) : null;
 
-    res.send(renderProfilePage(req.user, profile));
+    // Collect all phones linked to this user (for multi-phone support)
+    var email = (profile && profile.email) || req.user.email || null;
+    var phones = [];
+    if (email) phones = await getPhonesForEmail(email);
+    if (phone && phones.indexOf(phone) === -1) phones.push(phone);
+
+    var listings = await fetchUserListings({ phones: phones });
+
+    res.send(renderProfilePage(req.user, profile, { phones: phones, email: email, listings: listings }));
 });
 
 router.post('/profile/name', nameLimiter, optionalAuth, async function(req, res) {
     if (!req.user) return res.status(401).json({ ok: false, error: 'Not authenticated' });
-    if (req.user.auth_type !== 'phone') {
-        return res.status(400).json({ ok: false, error: 'Name editing requires phone login' });
+    if (!req.user.phone) {
+        return res.status(400).json({ ok: false, error: 'Verify a phone via WhatsApp to edit your name' });
     }
 
     var name = (req.body.name || '').trim();

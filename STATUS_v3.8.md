@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.4 | **Date:** Apr 20, 2026 | **App version:** 3.8.0
+**Version:** 1.6 | **Date:** Apr 23, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -167,11 +167,58 @@ Three session types, all coexist:
 
 ### Navigation
 - Housing page "Rides" pill: `/clusters` → `/`
+
+---
+
+## Apr 21, 2026 — Housing Share Button + Data Cleanup
+
+### Share button (housing board)
+- Added "Share" button inline with WA Message button on expanded listing cards
+- Web Share API on mobile (native share sheet), clipboard fallback on desktop
+- Flat pill design matching WA button (same shape/size/weight, gray instead of green)
+- Upload-arrow SVG icon (not emoji), subtle box-shadow
+- Clicks logged to `card_expand_log` with `page='housing-share'`
+- Share button also present on `/listing/:slug` detail pages
+
+### Data cleanup
+- Deleted 14 near-duplicate listings (same source_contact + location + price)
+- Deleted 1 false positive: graduation hood request misclassified as housing
+- Deleted 1 out-of-area listing: New York sublease (60 Henry St)
+- Root cause of dupes: dedup hashes exact message text; WA message edits bypass hash → new insert
 - Clusters page tagline: added FAQ link
 - Clusters footer: added FAQ + Terms links, bumped to v3.8
 
 ### FAQ
 - Q2 updated to reflect T1/T2 flow (email login + WA phone verify)
+
+---
+
+## Apr 23, 2026 — My Profile Rewrite + Maintenance Page
+
+### /profile rewrite (feed-style layout)
+- Identity card: avatar, name (inline-editable for any T2 user with a profile row), member since, email (✓ Verified), phone numbers list
+- Phones: all phones linked to user's email shown (via new `getPhonesForEmail()`); "+ Add another number" CTA routes to `/verify/wa?returnTo=/profile`
+- Empty state: "No phone linked" → big green "Verify via WhatsApp" CTA
+- My Rides section (maroon header): Upcoming (ride_plan_date >= today) + Past split, each with count
+- My Housing section (teal header): Active (active=true) + Inactive split, each with count
+- Rides show origin→destination, date, type badge, truncated raw_message preview
+- Housing show location, price, beds/baths, listing_type, link to `/listing/:slug`, truncated message_text
+- Edit name pill: SVG pencil + "Edit" label (replaced tiny ✏ unicode)
+
+### Backend changes
+- `lib/profiles.js` — new `getPhonesForEmail(email)` returns all linked phones
+- `lib/data.js` — new `fetchUserListings({phones})` queries `v3_requests` (by source_contact) + `v3_housing` (by source_contact OR poster_phone), splits by date/active
+- `routes/profile.js` — loads phones + listings, passes ctx to view
+- `routes/profile.js` POST `/profile/name` — gate changed from `auth_type==='phone'` to `req.user.phone` presence (supports T2 email-session users)
+- `routes/verify.js` GET `/verify/wa` — phone-auth users now resolve linked email via `getProfile()`, enables "Add 2nd number" flow from phone session
+
+### Deploy maintenance page (nginx error_page)
+- `public/maintenance.html` in repo (branded spinner, auto-refresh 15s, "Back online in seconds")
+- Deployed to VPS `/var/www/ridesplit-maintenance/maintenance.html` (owned www-data:www-data, 755/644)
+- `/etc/nginx/sites-available/ridesplit.app` updated: `proxy_intercept_errors on`, `proxy_connect_timeout 2s`, `error_page 502 503 504 = @maintenance`, new `location @maintenance` block
+- Backup saved: `/etc/nginx/sites-available/ridesplit.app.bak.<timestamp>`
+- Verified: stopping `aggie-v3-dash` → HTTP 200 maintenance page served; restart → normal app back
+- Fires automatically during `pm2 restart` (~1-2s window). No app code changes.
 
 ---
 
