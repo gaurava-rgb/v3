@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.6 | **Date:** Apr 23, 2026 | **App version:** 3.8.0
+**Version:** 1.7 | **Date:** Apr 23, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -219,6 +219,52 @@ Three session types, all coexist:
 - Backup saved: `/etc/nginx/sites-available/ridesplit.app.bak.<timestamp>`
 - Verified: stopping `aggie-v3-dash` → HTTP 200 maintenance page served; restart → normal app back
 - Fires automatically during `pm2 restart` (~1-2s window). No app code changes.
+
+---
+
+## Apr 23, 2026 — Verified Badges + Redaction + Verify Page Polish (Sprint 16)
+
+### Verified badges (rides + housing)
+- Scalloped green SVG badge (Material-style verified) inline after poster name when source_contact phone exists in `user_profiles`
+- `routes/clusters.js` + `routes/housing.js` fetch all `user_profiles.phone` into a Set per request, pass to renderers
+- Hero-level legend under tagline: `✓ = Phone number verified`
+- Sticky section-label legends (direction-label on rides, section-label on housing): appear only when that section contains ≥1 verified poster
+- `?demo=1` query param on both pages force-marks every poster verified for preview/screenshots
+- Tap badge → black tooltip "Phone number verified" (1.8s auto-dismiss); mobile-safe, no hover
+
+### T1 locked per-card CTA on rides
+- Instead of separate housing-style card per row, T1 shows a small dashed-maroon ghost button in the same slot as T2's green WA Message button
+- Copy: "Verify to unlock DM" → `/verify/wa?returnTo=/`
+- Rationale: rides feed is denser than housing (6+ cards/screen), full card per listing would kill scannability. Page banner + inline ghost button covers it.
+
+### Name redaction for T0/T1 (rides + housing)
+- Uses existing `redactName()` helper (first char + asterisks + last char, e.g. "Gaurav" → "G****v")
+- Rides: person rows + cluster summary now call `displayName(req, false)` for T0/T1 (was hardcoded "Someone")
+- Housing: card summary line, "Posted by" field, and listing-detail senderName all redact when tier<2
+- Known: whole name treated as one token ("Pooja Suresh" → "P*********h"). First/last split deferred.
+
+### Unified nav rows (rides + housing)
+- T1: `email · My Profile · Sign out` (both pages)
+- T2: `email · ✓ WA Verified · My Profile · Sign out` (both pages)
+- Removed duplicate "Verify WhatsApp" link from rides T1 auth row (banner already nudges)
+- Removed "Verify WhatsApp to unlock contact info" link from housing T1 auth row (banner already nudges)
+- Added "My Profile" link to homepage auth row (was missing; housing had it)
+
+### /verify/wa page rewrite
+- Dropped 3 steps → 2 tighter steps
+- Removed subtitle "Link your WhatsApp number to your Aggie Connect account"
+- Added green callout box: "You'll unlock: Full names & contact information to message users."
+- "Takes 30 seconds" line moved directly below the green CTA button
+- Warning tightened: "Important: Send from the number you use in TAMU groups."
+
+### Files touched
+- `routes/clusters.js` — verifiedSet fetch, personHtml badge+locked btn, sectionHasVerified helper, legend, nav cleanup
+- `routes/housing.js` — fetchVerifiedSet(), demo-mode support, pass verifiedSet to renderHousingBoard
+- `lib/views.js` — renderHousingBoard takes verifiedSet, listingVerified(), bucketHasVerified(), hero legend, section-label legend, redacted postedByStr + senderName, unified auth row CSS (`auth-email-display`)
+- `routes/verify.js` — steps/outcome/warning copy rewrite
+
+### Deployed
+- Commit `112ff23` on main, pushed and pulled on VPS, all PM2 processes restarted clean
 
 ---
 
