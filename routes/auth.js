@@ -119,65 +119,17 @@ router.get('/logout', function(req, res) {
     res.redirect('/');
 });
 
-// ── WhatsApp phone OTP ────────────────────────────────────────────────────────
-
-router.get('/login/phone', function(req, res) {
-    var prefill = req.query.phone || '';
-    res.send(renderPhoneLoginPage('', prefill));
-});
-
-router.post('/login/phone', async function(req, res) {
-    var raw = (req.body.phone || '').trim();
-    var digits = raw.replace(/\D/g, '');
-    if (digits.length === 10) digits = '1' + digits;
-
-    if (!digits || digits.length < 11) {
-        return res.send(renderPhoneLoginPage('Please enter a valid US phone number.', raw));
-    }
-
-    var result = await sendOtp(digits);
-    if (!result.ok) {
-        return res.send(renderPhoneLoginPage(result.error, raw));
-    }
-
-    res.redirect('/verify/phone?phone=' + encodeURIComponent(digits));
-});
-
-router.get('/verify/phone', function(req, res) {
-    var phone = (req.query.phone || '').trim();
-    if (!phone) return res.redirect('/login/phone');
-    res.send(renderPhoneVerifyPage(phone, ''));
-});
-
-router.post('/verify/phone', async function(req, res) {
-    var phone = (req.body.phone || '').trim();
-    var code  = (req.body.code  || '').trim();
-
-    if (!phone) return res.redirect('/login/phone');
-
-    var result = await verifyOtp(phone, code);
-    if (!result.ok) {
-        return res.send(renderPhoneVerifyPage(phone, result.error));
-    }
-
-    setPhoneSessionCookie(res, phone);
-    // Create/update profile (non-blocking — don't fail auth if this errors)
-    upsertProfile(phone).catch(err => console.error('[Auth] upsertProfile error:', err.message));
-
-    // If user also has an active email session, link the email to this phone's profile
-    var accessToken = req.cookies.access_token;
-    if (accessToken) {
-        authClient.auth.getUser(accessToken).then(function(result) {
-            var email = result.data && result.data.user && result.data.user.email;
-            if (email) {
-                return linkEmailToProfile(phone, email);
-            }
-        }).catch(err => console.error('[Auth] linkEmailToProfile (phone verify) error:', err.message));
-    }
-
-    var dest = req.body.next || req.query.next || '/';
-    res.redirect(dest);
-});
+// ── WhatsApp phone OTP login — DISABLED ──────────────────────────────────────
+// Only valid login path: email (/login) + /verify/wa for phone verification.
+function redirectToEmailLogin(req, res) {
+    var next = req.query.next || req.body && req.body.next || '';
+    var suffix = next ? '?next=' + encodeURIComponent(next) : '';
+    res.redirect('/login' + suffix);
+}
+router.get('/login/phone',   redirectToEmailLogin);
+router.post('/login/phone',  redirectToEmailLogin);
+router.get('/verify/phone',  redirectToEmailLogin);
+router.post('/verify/phone', redirectToEmailLogin);
 
 router.post('/log-click', optionalAuth, async function(req, res) {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });

@@ -12,7 +12,7 @@ var { nameLimiter } = require('../middleware/rateLimiter');
 
 router.get('/profile', optionalAuth, async function(req, res) {
     if (!req.user) {
-        return res.redirect('/login/phone?next=' + encodeURIComponent('/profile'));
+        return res.redirect('/login?next=' + encodeURIComponent('/profile'));
     }
 
     var phone = req.user.phone || null;
