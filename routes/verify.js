@@ -349,30 +349,30 @@ function renderWaVerifyPage(token, waLink, returnTo) {
     </div>
 
     <h1>Verify your WhatsApp</h1>
-    <p class="subtitle">Link your WhatsApp number to your Aggie Connect account.</p>
 
     <ol class="steps">
       <li>
         <span class="step-num">1</span>
-        <span>Use the same phone number you're in the TAMU ride-share groups with — that's the number tied to your listings.</span>
+        <span>Tap the green button below &mdash; opens WhatsApp with a message ready to send.</span>
       </li>
       <li>
         <span class="step-num">2</span>
-        <span>Tap the button below. It'll open a WhatsApp chat with our bot with a message already typed for you.</span>
-      </li>
-      <li>
-        <span class="step-num">3</span>
-        <span>Just tap <strong>Send</strong>. Once we receive your message (within 5 minutes), your account unlocks automatically.</span>
+        <span>Hit <strong>Send</strong>. Your account unlocks automatically within seconds.</span>
       </li>
     </ol>
 
+    <div class="warning" style="background:#f0fdf4;border-color:#86efac;color:#166534;">
+      <strong>You'll unlock:</strong> Full names &amp; contact information to message users.
+    </div>
+
     <div class="warning">
-      <strong>Important:</strong> This only works if you message us from the number you use in the TAMU groups. Different number = verification fails.
+      <strong>Important:</strong> Send from the number you use in TAMU groups.
     </div>
 
     <a id="btn-open-wa" class="btn-wa" href="${waLink}">
       Open WhatsApp &amp; Send Verification
     </a>
+    <p style="text-align:center;font-size:0.82rem;color:#888;margin-top:10px;">Takes 30 seconds.</p>
   </div>
 
   <!-- Waiting state -->

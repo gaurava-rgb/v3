@@ -13,6 +13,9 @@ var { optionalAuth, getUserTier } = require('../middleware/auth');
 // ── College Station is the hub ──────────────────────────────────────────
 var CS = 'College Station';
 
+// Scalloped verified badge (Material-style), green fill + white check
+var VERIFIED_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="#25D366" d="M23 12l-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.82.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68L23 12zm-12.91 4.72l-3.8-3.81 1.41-1.41 2.39 2.38 5.66-5.66 1.41 1.41-7.07 7.09z"/></svg>';
+
 function isLeaving(cluster) {
     var o = (cluster.origin || '').toLowerCase();
     return o === 'college station' || o === 'cstat' || o === 'bryan' || o === 'cs';
@@ -52,7 +55,7 @@ function clusterSummary(cluster, tier) {
     var needs = cluster.needs;
     if (offers.length > 0) {
         var o = offers[0];
-        var name = tier >= 2 ? escHtml(displayName(o, true)) : 'Someone';
+        var name = tier >= 2 ? escHtml(displayName(o, true)) : escHtml(displayName(o, false) || 'Someone');
         var timeStr = o.ride_plan_time ? ' at ' + fmtTime(o.ride_plan_time) : '';
         var seats = o.raw_message && o.raw_message.match(/(\d)\s*seat/i);
         var seatStr = seats ? ' with ' + seats[1] + ' seats' : '';
@@ -65,15 +68,24 @@ function clusterSummary(cluster, tier) {
     return needs.length + ' rider' + (needs.length > 1 ? 's' : '') + ' headed this way &mdash; no driver yet';
 }
 
-function personHtml(req, tier, userPhone) {
+function personHtml(req, tier, userPhone, verifiedSet) {
     var isOffer = req.request_type === 'offer';
     var typeClass = isOffer ? 'offer' : 'need';
     var badge = isOffer ? '&#128663; Offering' : '&#9995; Looking';
-    var name = tier >= 2 ? escHtml(displayName(req, true)) : 'Someone';
+    var name = tier >= 2 ? escHtml(displayName(req, true)) : escHtml(displayName(req, false) || 'Someone');
     var timeStr = req.ride_plan_time ? fmtTime(req.ride_plan_time) : '&mdash;';
     var msg = escHtml(req.raw_message || '');
     var group = escHtml(req.source_group_name || req.source_group || '');
     var sent = req.created_at ? formatMsgTime(req.created_at) : '';
+
+    // Verified poster tick — show for T1+T2 whenever poster phone in user_profiles
+    var verifiedTick = '';
+    if (tier >= 1 && verifiedSet && req.source_contact) {
+        var posterPhone = req.source_contact.replace(/\D/g, '');
+        if (posterPhone && verifiedSet.has(posterPhone)) {
+            verifiedTick = ' <span class="verified-tick" onclick="event.stopPropagation();showVerifiedTip(this)" title="Phone number verified">' + VERIFIED_SVG + '</span>';
+        }
+    }
 
     var yourPostBadge = '';
     if (tier >= 2 && userPhone && req.source_contact) {
@@ -84,6 +96,13 @@ function personHtml(req, tier, userPhone) {
     }
 
     var waBtn = '';
+    if (tier === 1 && req.source_contact) {
+        // T1 locked ghost button — same slot as T2 green button
+        waBtn = '<a class="wa-contact-btn wa-locked" href="/verify/wa?returnTo=/" onclick="event.stopPropagation()">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+            'Verify to unlock DM' +
+            '</a>';
+    }
     if (tier >= 2 && req.source_contact) {
         var displayPhone = req.source_contact.replace(/\D/g, '');
         if (displayPhone) {
@@ -121,7 +140,7 @@ function personHtml(req, tier, userPhone) {
     return '<div class="person-card ' + typeClass + '">' +
         '<div class="person-top">' +
             '<span class="type-badge ' + typeClass + '">' + badge + '</span>' +
-            '<span class="person-name">' + name + yourPostBadge + '</span>' +
+            '<span class="person-name">' + name + verifiedTick + yourPostBadge + '</span>' +
             '<span class="person-depart">' + (req.ride_plan_time ? timeStr : '&mdash;') + '</span>' +
         '</div>' +
         msgHtml +
@@ -129,7 +148,7 @@ function personHtml(req, tier, userPhone) {
     '</div>';
 }
 
-function clusterHtml(cluster, direction, tier, userPhone) {
+function clusterHtml(cluster, direction, tier, userPhone, verifiedSet) {
     var allMembers = cluster.offers.concat(cluster.needs);
     var from = escHtml(cluster.origin || '?');
     var to = escHtml(cluster.destination || '?');
@@ -147,8 +166,8 @@ function clusterHtml(cluster, direction, tier, userPhone) {
 
     var personCards = '';
     // offers first, then needs
-    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone);
-    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone);
+    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone, verifiedSet);
+    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone, verifiedSet);
 
     var repDate = escHtml(cluster.repDate || '');
     return '<article class="cluster ' + direction + '" data-from="' + from + '" data-to="' + to + '" data-date="' + repDate + '" tabindex="0" role="button" aria-expanded="false">' +
@@ -179,8 +198,21 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
                 .eq('request_category', 'ride')
                 .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
                 .order('created_at', { ascending: false }),
-            readClient.from('monitored_groups').select('group_id, group_name, is_test').eq('active', true)
+            readClient.from('monitored_groups').select('group_id, group_name, is_test').eq('active', true),
+            readClient.from('user_profiles').select('phone')
         ]);
+
+        var verifiedSet = new Set((results[2].data || []).map(function(r) { return (r.phone || '').replace(/\D/g, ''); }).filter(Boolean));
+
+        // Demo mode: ?demo=1 marks every poster verified for preview
+        var demoMode = req.query.demo === '1';
+        if (demoMode) {
+            var rawForDemo = results[0].data || [];
+            for (var vi = 0; vi < rawForDemo.length; vi++) {
+                var p = (rawForDemo[vi].source_contact || '').replace(/\D/g, '');
+                if (p) verifiedSet.add(p);
+            }
+        }
 
         var allGroups = results[1].data || [];
         var testGroupFilter = buildTestGroupSet(allGroups);
@@ -275,24 +307,35 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
                 (isToday ? ' <span class="today-badge">Today</span>' : '') +
                 '<span class="date-summary">' + summaryParts.join(' &middot; ') + '</span></div>';
 
+            var DIR_LEGEND = '<span class="dir-legend"><span class="verified-tick verified-tick-legend">' + VERIFIED_SVG + '</span>= phone verified</span>';
+            function sectionHasVerified(cls) {
+                for (var ii = 0; ii < cls.length; ii++) {
+                    var mm = cls[ii].offers.concat(cls[ii].needs);
+                    for (var jj = 0; jj < mm.length; jj++) {
+                        var pp = (mm[jj].source_contact || '').replace(/\D/g, '');
+                        if (pp && verifiedSet.has(pp)) return true;
+                    }
+                }
+                return false;
+            }
             if (leaving.length > 0) {
-                dateBlocksHtml += '<div class="direction-label leaving">&#8593; Leaving College Station <span class="direction-count">(' + leavingCount + ')</span></div>';
+                dateBlocksHtml += '<div class="direction-label leaving">&#8593; Leaving College Station <span class="direction-count">(' + leavingCount + ')</span>' + (sectionHasVerified(leaving) ? DIR_LEGEND : '') + '</div>';
                 for (var li = 0; li < leaving.length; li++) {
-                    dateBlocksHtml += clusterHtml(leaving[li], 'leaving', tier, userPhone);
+                    dateBlocksHtml += clusterHtml(leaving[li], 'leaving', tier, userPhone, verifiedSet);
                 }
             }
 
             if (arriving.length > 0) {
-                dateBlocksHtml += '<div class="direction-label arriving">&#8595; Coming to College Station <span class="direction-count">(' + arrivingCount + ')</span></div>';
+                dateBlocksHtml += '<div class="direction-label arriving">&#8595; Coming to College Station <span class="direction-count">(' + arrivingCount + ')</span>' + (sectionHasVerified(arriving) ? DIR_LEGEND : '') + '</div>';
                 for (var ari = 0; ari < arriving.length; ari++) {
-                    dateBlocksHtml += clusterHtml(arriving[ari], 'arriving', tier, userPhone);
+                    dateBlocksHtml += clusterHtml(arriving[ari], 'arriving', tier, userPhone, verifiedSet);
                 }
             }
 
             if (others.length > 0) {
-                dateBlocksHtml += '<div class="direction-label others">&#8646; Other Routes <span class="direction-count">(' + othersCount + ')</span></div>';
+                dateBlocksHtml += '<div class="direction-label others">&#8646; Other Routes <span class="direction-count">(' + othersCount + ')</span>' + (sectionHasVerified(others) ? DIR_LEGEND : '') + '</div>';
                 for (var oi = 0; oi < others.length; oi++) {
-                    dateBlocksHtml += clusterHtml(others[oi], 'other', tier, userPhone);
+                    dateBlocksHtml += clusterHtml(others[oi], 'other', tier, userPhone, verifiedSet);
                 }
             }
 
@@ -320,11 +363,12 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         authHtml = '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see contact details</div>';
     } else if (tier === 1) {
         authHtml = '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail || '') + '</span>' +
-            ' &middot; <a href="/verify/wa?returnTo=/clusters" class="verified-badge-pending">Verify WhatsApp</a>' +
+            ' &middot; <a href="/profile">My Profile</a>' +
             ' &middot; <a href="/logout">Sign out</a></div>';
     } else {
         authHtml = '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail || '') + '</span>' +
             ' <span class="verified-badge">&#10003; WA Verified</span>' +
+            ' &middot; <a href="/profile">My Profile</a>' +
             ' &middot; <a href="/logout">Sign out</a></div>';
     }
 
@@ -353,6 +397,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '<div class="hero"><h1>Aggie Connect</h1>' +
         '<p class="subtitle">' + subtitle + '</p>' +
         '<p class="tagline">Find someone going your way. Updated in real time from WhatsApp groups. <a href="/faq">FAQs &mdash; how, why, what?</a></p>' +
+        '<p class="legend"><span class="verified-tick verified-tick-legend">' + VERIFIED_SVG + '</span> = Phone number verified</p>' +
         authHtml +
         '</div>\n' +
         bannerHtml +
@@ -461,6 +506,8 @@ var CSS = [
 '.today-badge { display: inline-block; background: #dcfce7; color: #16a34a; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }',
 '.date-summary { margin-left: auto; font-size: 11px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }',
 '.direction-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; margin: 0 0 8px; display: flex; align-items: center; gap: 6px; position: sticky; top: var(--sticky-dir-top, 120px); z-index: 14; box-shadow: 0 2px 0 0 var(--bg); }',
+'.dir-legend { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-muted); opacity: 0.85; }',
+'.dir-legend .verified-tick { margin: 0 2px 0 0; }',
 '.direction-label.leaving { color: #1d4ed8; background: #eff6ff; border-top: 1px solid #dbeafe; border-bottom: 1px solid #dbeafe; }',
 '.direction-label.arriving { color: #15803d; background: #f0fdf4; border-top: 1px solid #dcfce7; border-bottom: 1px solid #dcfce7; }',
 '.direction-label.others { color: #92400e; background: #fffbeb; border-top: 1px solid #fde68a; border-bottom: 1px solid #fde68a; }',
@@ -506,6 +553,14 @@ var CSS = [
 '.wa-contact-btn { display: inline-flex; align-items: center; gap: 5px; background: #25D366; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px; text-decoration: none; white-space: nowrap; flex-shrink: 0; transition: background 0.15s; }',
 '.wa-contact-btn:hover { background: #1da851; }',
 '.wa-contact-btn svg { flex-shrink: 0; }',
+'.wa-contact-btn.wa-locked { background: transparent; color: var(--maroon); border: 1px dashed #c8a4a4; font-weight: 600; }',
+'.wa-contact-btn.wa-locked:hover { background: #fdf5f5; border-color: var(--maroon); }',
+'.verified-tick { display: inline-flex; align-items: center; justify-content: center; margin-left: 3px; cursor: pointer; vertical-align: -2px; line-height: 0; }',
+'.verified-tick svg { display: block; }',
+'.verified-tick.verified-tick-legend { margin: 0 2px; cursor: default; }',
+'.legend { font-size: 11px; color: var(--text-muted); margin-top: 4px; }',
+'.verified-tip { position: absolute; background: #111; color: #fff; font-size: 11px; font-weight: 600; padding: 6px 10px; border-radius: 6px; z-index: 500; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }',
+'.verified-tip::after { content: ""; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 4px solid #111; }',
 '.page-switch-btn { position: fixed; top: 14px; right: 16px; z-index: 300; display: inline-flex; align-items: center; gap: 5px; background: var(--card); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 99px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: box-shadow 0.15s, border-color 0.15s; white-space: nowrap; }',
 '.page-switch-btn:hover { border-color: #ccc; box-shadow: 0 3px 12px rgba(0,0,0,0.12); color: var(--text); }',
 '.footer { text-align: center; padding: 16px 0; font-size: 11px; color: #ccc; border-top: 1px solid #eee; margin-top: 20px; }',
@@ -533,6 +588,7 @@ var CSS = [
 // ── JS (from mockup) ───────────────────────────────────────────────────
 var JS = [
 'function beaconJson(url,data){navigator.sendBeacon(url,new Blob([JSON.stringify(data)],{type:"application/json"}));}',
+'function showVerifiedTip(el){var existing=document.querySelector(".verified-tip");if(existing)existing.remove();var tip=document.createElement("div");tip.className="verified-tip";tip.textContent="Phone number verified";document.body.appendChild(tip);var r=el.getBoundingClientRect();tip.style.left=(r.left+window.scrollX+r.width/2-tip.offsetWidth/2)+"px";tip.style.top=(r.top+window.scrollY-tip.offsetHeight-6)+"px";setTimeout(function(){if(tip.parentNode)tip.remove();},1800);}',
 'function toggleCluster(el) { el.classList.toggle("open"); el.setAttribute("aria-expanded", el.classList.contains("open")); if (el.classList.contains("open")) { beaconJson("/log-expand",{page:"clusters",origin:el.getAttribute("data-from"),destination:el.getAttribute("data-to"),ride_date:el.getAttribute("data-date"),user_email:_userEmail,phone:_userPhone}); } }',
 'var activeFilters = { from: new Set(), to: new Set() };',
 'function toggleFilter(pill) { var type = pill.getAttribute("data-filter"); var city = pill.getAttribute("data-city"); if (activeFilters[type].has(city)) { activeFilters[type].delete(city); } else { activeFilters[type].add(city); } syncPills(); applyFilters(); updateFab(); }',

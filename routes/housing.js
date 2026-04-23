@@ -5,7 +5,15 @@ var router = express.Router();
 var { getActiveListings, getListingBySlug } = require('../lib/housing');
 var { renderHousingBoard, renderListingPage } = require('../lib/views');
 var { optionalAuth } = require('../middleware/auth');
+var { readClient } = require('../lib/supabase');
 var isEmailWaVerified = require('../lib/profiles').isEmailWaVerified;
+
+async function fetchVerifiedSet() {
+    try {
+        var { data } = await readClient.from('user_profiles').select('phone');
+        return new Set((data || []).map(function(r) { return (r.phone || '').replace(/\D/g, ''); }).filter(Boolean));
+    } catch (e) { return new Set(); }
+}
 
 router.get('/housing', optionalAuth, async function(req, res) {
     try {
@@ -21,7 +29,14 @@ router.get('/housing', optionalAuth, async function(req, res) {
         }
         var userEmail = req.user ? (req.user.email || '') : '';
         var userPhone = req.user ? (req.user.phone || '') : '';
-        var html = renderHousingBoard(listings, req.query.type || 'all', tier, userEmail, userPhone);
+        var verifiedSet = await fetchVerifiedSet();
+        if (req.query.demo === '1') {
+            (listings || []).forEach(function(l) {
+                var p = (l.source_contact || l.poster_phone || l.contact_phone || '').replace(/\D/g, '');
+                if (p) verifiedSet.add(p);
+            });
+        }
+        var html = renderHousingBoard(listings, req.query.type || 'all', tier, userEmail, userPhone, verifiedSet);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
     } catch (err) {
