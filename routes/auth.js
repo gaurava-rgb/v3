@@ -6,12 +6,19 @@ var express = require('express');
 var router = express.Router();
 var { authClient, setAuthCookies, clearAuthCookies, setPhoneSessionCookie, clearPhoneSessionCookie, parsePhoneSession, optionalAuth } = require('../middleware/auth');
 var { writeClient } = require('../lib/supabase');
-var { renderLoginPage, renderVerifyPage } = require('../lib/views');
+var { renderLoginPage, renderVerifyPage, renderCheckEmailPage } = require('../lib/views');
+
+var CALLBACK_URL = 'https://ridesplit.app/auth/callback';
 var { upsertProfile, linkEmailToProfile } = require('../lib/profiles');
 
 router.get('/login', function(req, res) {
     var prefill = req.query.email || '';
-    res.send(renderLoginPage('', prefill));
+    var err = req.query.err;
+    var errMsg = '';
+    if (err === 'expired')       errMsg = 'That sign-in link expired or was already used. Request a new one below.';
+    else if (err === 'missing_token') errMsg = 'That link is invalid. Request a new one below.';
+    else if (err === 'callback') errMsg = 'Sign-in failed. Please try again.';
+    res.send(renderLoginPage(errMsg, prefill));
 });
 
 router.post('/login', async function(req, res) {
@@ -27,29 +34,78 @@ router.post('/login', async function(req, res) {
     try {
         var result = await authClient.auth.signInWithOtp({
             email: email,
-            options: { shouldCreateUser: true }
+            options: {
+                shouldCreateUser: true,
+                emailRedirectTo: CALLBACK_URL
+            }
         });
 
         if (result.error) {
-            console.error('[Auth] OTP send error:', JSON.stringify(result.error));
+            console.error('[Auth] magic link send error:', JSON.stringify(result.error));
             var errMsg = result.error.message || result.error.msg || JSON.stringify(result.error);
             if (errMsg.includes('rate')) {
                 return res.send(renderLoginPage('Too many attempts. Please wait a minute and try again.', email));
             }
-            return res.send(renderLoginPage('Failed to send verification code. Please try again.', email));
+            return res.send(renderLoginPage('Failed to send sign-in link. Please try again.', email));
         }
 
-        res.redirect('/verify?email=' + encodeURIComponent(email));
+        res.redirect('/check-email?email=' + encodeURIComponent(email));
     } catch (err) {
         console.error('[Auth] OTP send exception:', err.message);
         res.send(renderLoginPage('Something went wrong. Please try again.', email));
     }
 });
 
+router.get('/check-email', function(req, res) {
+    var email = (req.query.email || '').trim();
+    if (!email) return res.redirect('/login');
+    res.send(renderCheckEmailPage(email, ''));
+});
+
+// GET /auth/callback — magic link lands here with ?token_hash=...&type=...&next=...
+router.get('/auth/callback', async function(req, res) {
+    var token_hash = (req.query.token_hash || '').trim();
+    var type       = (req.query.type || 'magiclink').trim();
+    var next       = req.query.next || '/';
+    if (!/^\//.test(next)) next = '/'; // only allow relative redirects
+
+    if (!token_hash) {
+        console.error('[Auth] callback missing token_hash');
+        return res.redirect('/login?err=missing_token');
+    }
+
+    try {
+        var result = await authClient.auth.verifyOtp({ token_hash: token_hash, type: type });
+
+        if (result.error || !result.data || !result.data.session) {
+            console.error('[Auth] callback verify error:', JSON.stringify(result.error), 'type=', type);
+            return res.redirect('/login?err=expired');
+        }
+
+        setAuthCookies(res, result.data.session.access_token, result.data.session.refresh_token);
+
+        var email = result.data.user && result.data.user.email;
+        var phoneToken = req.cookies.wa_phone;
+        if (phoneToken && email) {
+            var phoneData = parsePhoneSession(phoneToken);
+            if (phoneData && phoneData.phone) {
+                linkEmailToProfile(phoneData.phone, email)
+                    .catch(err => console.error('[Auth] linkEmailToProfile (callback) error:', err.message));
+            }
+        }
+
+        res.redirect(next);
+    } catch (err) {
+        console.error('[Auth] callback exception:', err.message);
+        res.redirect('/login?err=callback');
+    }
+});
+
+// Legacy typed-OTP entry — redirect to new check-email page
 router.get('/verify', function(req, res) {
     var email = (req.query.email || '').trim();
     if (!email) return res.redirect('/login');
-    res.send(renderVerifyPage(email, ''));
+    res.redirect('/check-email?email=' + encodeURIComponent(email));
 });
 
 router.post('/verify', async function(req, res) {
