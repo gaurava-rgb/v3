@@ -6,8 +6,7 @@ var express = require('express');
 var router = express.Router();
 var { authClient, setAuthCookies, clearAuthCookies, setPhoneSessionCookie, clearPhoneSessionCookie, parsePhoneSession, optionalAuth } = require('../middleware/auth');
 var { writeClient } = require('../lib/supabase');
-var { renderLoginPage, renderVerifyPage, renderPhoneLoginPage, renderPhoneVerifyPage } = require('../lib/views');
-var { sendOtp, verifyOtp } = require('../lib/wa-otp');
+var { renderLoginPage, renderVerifyPage } = require('../lib/views');
 var { upsertProfile, linkEmailToProfile } = require('../lib/profiles');
 
 router.get('/login', function(req, res) {
