@@ -54,7 +54,7 @@ router.get('/verify', function(req, res) {
 
 router.post('/verify', async function(req, res) {
     var email = (req.body.email || '').trim().toLowerCase();
-    var token = (req.body.token || '').replace(/\s/g, '');
+    var token = (req.body.token || '').replace(/\D/g, '');
 
     if (!email || !token) return res.redirect('/login');
 
@@ -81,10 +81,13 @@ router.post('/verify', async function(req, res) {
         }
 
         if (result.error) {
-            console.error('[Auth] OTP verify error:', JSON.stringify(result.error));
-            var errMsg = 'Invalid code. Please check and try again.';
-            if (result.error.message.toLowerCase().includes('expired')) {
+            console.error('[Auth] OTP verify error:', JSON.stringify(result.error), 'email=', email, 'tokenLen=', token.length);
+            var raw = (result.error.message || '').toLowerCase();
+            var errMsg = 'Invalid or expired code. Please request a new one and type exactly what\'s in the email.';
+            if (raw.includes('expired') && !raw.includes('invalid')) {
                 errMsg = 'Code expired. Please request a new one.';
+            } else if (raw.includes('invalid') && !raw.includes('expired')) {
+                errMsg = 'Invalid code. Double-check digits and try again.';
             }
             return res.send(renderVerifyPage(email, errMsg));
         }
