@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.7 | **Date:** Apr 23, 2026 | **App version:** 3.8.0
+**Version:** 1.8 | **Date:** Apr 24, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -265,6 +265,57 @@ Three session types, all coexist:
 
 ### Deployed
 - Commit `112ff23` on main, pushed and pulled on VPS, all PM2 processes restarted clean
+
+---
+
+## Sprint 17 — Apr 24, 2026 (Auth Cleanup + Magic Link + Analytics)
+
+### Killed phone OTP login
+- `/login/phone` + `/verify/phone` (GET+POST) now redirect to `/login` (email). Only valid login = email.
+- `routes/profile.js:15` unauthed profile redirect → `/login` (was `/login/phone`)
+- Removed dead `renderPhoneLoginPage` + `renderPhoneVerifyPage` from `lib/views.js` (121 lines, no callers)
+- Dropped unused `sendOtp`/`verifyOtp` imports from `routes/auth.js` wa-otp module
+- Commits `3c212e3`, `2052647`
+
+### Email OTP → Magic link flow (commit `5ed557f`)
+- `/login` POST passes `emailRedirectTo=https://ridesplit.app/auth/callback`, redirects to new `/check-email` landing instead of `/verify` code input
+- New `GET /auth/callback` — reads `token_hash`, `type`, `next` from query, calls `verifyOtp({token_hash, type})`, sets cookies, redirects
+- New `renderCheckEmailPage(email)` — simple "Check your inbox" landing with system font
+- `/verify` GET → redirects to `/check-email` (legacy path)
+- `/verify` POST kept as fallback for stale clients still typing codes
+- `/login?err=expired|missing_token|callback` — error param surfacing
+- Also: strip non-digits from typed token, distinguish "expired" vs "invalid" in error msg (earlier commit `cc704a4`)
+
+### Supabase dashboard changes (manual, done by user)
+- Added `https://ridesplit.app/auth/callback` to Auth → URL Configuration → Redirect URLs
+- Site URL = `https://ridesplit.app`
+- Magic Link + Confirm signup templates rewritten — system font stack, prominent maroon button, fallback link, `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type={magiclink|signup}&next=/`
+- OTP expiry: will bump 600→3600 later
+
+### peek_otp helper
+- `dashboard/peek_otp.js` (gitignored) — `node dashboard/peek_otp.js <email>` calls `admin.generateLink`, prints `email_otp` + `action_link`. Confirms project emits 8-digit OTPs. Use for recovering stuck users via action_link.
+
+### Analytics views (dashboard/dashboard.md)
+- `v_expand_by_tier` — joins `card_expand_log` to `user_profiles`, tags each row T0/T1/T2
+- `v_waclick_by_tier` — same for `wa_click_log` (column: `clicked_at` not `created_at`)
+- Pre-built queries: volume by tier×page, verified user openings, per-user activity, T0/T1/T2 funnel
+- `card_expand_log.created_at` exists; `wa_click_log.clicked_at` is the timestamp column
+
+### Housing data extraction + mapping
+- `tmp_groupme_summer_listings` table (DDL in `dashboard/groupme_summer_listings.sql`) — 28 summer sublease listings scraped from GroupMe, no phones
+- `dashboard/housing_map.html` + `housing_map.md` — Leaflet map + geographic breakdown of all BCS housing (v3 + groupme combined, ~25 properties, ~144 listings)
+- Wellborn Rd (Z Islander + Reveille Ranch) = 42% of stock
+- WhatsApp-only properties: Scandia, The London, The Aria, Tower Park. GroupMe-only: Park West, OTTO, UTrails, Lark, Stack, UCentre, Standard, Rise, Stadium View — potential bot expansion targets
+- GroupMe avg $779 vs WhatsApp $511 (property-mix driven, not same-unit pricing gap)
+
+### Files touched
+- `routes/auth.js` — rewrite for magic link; /login GET error surfacing; callback handler
+- `routes/profile.js` — redirect to /login
+- `lib/views.js` — add renderCheckEmailPage; remove phone OTP render fns
+- `.gitignore` — add `dashboard/`
+
+### Deployed
+- All 3 PM2 procs restarted after each change. Dash currently on commit `5ed557f`.
 
 ---
 
