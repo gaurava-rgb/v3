@@ -13,8 +13,8 @@ const openai = new OpenAI({
 const MODEL = process.env.LLM_MODEL || 'meta-llama/llama-3.1-8b-instruct:free';
 
 function buildSystemPrompt() {
-    const today = new Date().toISOString().split('T')[0];
-    const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+    const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' });
 
     return `You are a message parser for a university community platform at Texas A&M.
 Analyze WhatsApp messages and extract structured information.
@@ -62,6 +62,10 @@ Common ride patterns (all return isRequest: true):
 - "offering ride to DFW this weekend" -> offer, ride
 - "need help moving" -> need, help
 - "can help with groceries" -> offer, help
+- "if anyone going from Dallas to CS plz dm" -> need, ride, origin="Dallas", destination="College Station"
+- "anyone driving from Houston to cstat tomorrow" -> need, ride, origin="Houston", destination="College Station"
+
+CRITICAL: when message contains "from X to Y" pattern, ALWAYS set origin=X, destination=Y. Never default origin to College Station if "from <city>" is explicit.
 
 --- HOUSING MESSAGES ---
 
@@ -172,8 +176,14 @@ async function parseMessage(message, senderName = '') {
         const parsed = JSON.parse(jsonStr);
 
         if (parsed.isRequest) {
-            if (parsed.category === 'ride' && !parsed.origin) {
-                parsed.origin = 'College Station';
+            if (parsed.category === 'ride') {
+                // Backstop: explicit "from X to Y" overrides LLM extraction
+                const fromTo = message.match(/\bfrom\s+([A-Za-z][A-Za-z\s]{1,30}?)\s+to\s+([A-Za-z][A-Za-z\s]{1,30}?)(?=[\s,.!?]|$)/i);
+                if (fromTo) {
+                    parsed.origin = fromTo[1].trim();
+                    parsed.destination = fromTo[2].trim();
+                }
+                if (!parsed.origin) parsed.origin = 'College Station';
             }
 
             if (parsed.category === 'ride') {
