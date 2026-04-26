@@ -55,11 +55,9 @@ function chiToday() {
                 changes.request_origin = [r.request_origin, newOrigin];
             }
         }
-        if (newDate && newDate !== r.ride_plan_date) {
-            // Only update date when raw message has a relative-date keyword.
-            const hasRelative = /\b(today|tomorrow|tonight|tmrw|yesterday|this\s+(weekend|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)|next\s+(weekend|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday))\b/i.test(r.raw_message);
-            if (hasRelative) changes.ride_plan_date = [r.ride_plan_date, newDate];
-        }
+        // Date backfill skipped: re-parse uses now-based 'today', not message
+        // created_at, so it would misresolve relative dates retroactively.
+        // Forward-only fix is good enough; bad dates expire quickly.
 
         if (Object.keys(changes).length === 0) continue;
         diffs.push({ id: r.id, raw: r.raw_message.slice(0, 80), changes });
