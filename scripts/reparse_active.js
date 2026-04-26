@@ -44,10 +44,22 @@ function chiToday() {
         const newTime   = parsed.ride_plan_time || null;
 
         const changes = {};
-        if (newOrigin && newOrigin !== r.request_origin)      changes.request_origin = [r.request_origin, newOrigin];
-        if (newDest   && newDest   !== r.request_destination) changes.request_destination = [r.request_destination, newDest];
-        if (newDate   !== r.ride_plan_date && newDate)        changes.ride_plan_date = [r.ride_plan_date, newDate];
-        if (newTime   !== r.ride_plan_time && newTime)        changes.ride_plan_time = [r.ride_plan_time, newTime];
+        // Only fix the two known-bug classes:
+        //   1) origin defaulted to College Station when "from <other-city> to ..." was explicit
+        //   2) ride_plan_date off by 1 due to UTC TZ on relative-date messages
+        // Skip destination/time to avoid LLM jitter regressing good rows.
+        if (newOrigin && newOrigin !== r.request_origin) {
+            const rawHasFrom = /\bfrom\s+[A-Za-z]/i.test(r.raw_message);
+            const wasDefaultCS = r.request_origin === 'College Station';
+            if (rawHasFrom && wasDefaultCS && newOrigin !== 'College Station') {
+                changes.request_origin = [r.request_origin, newOrigin];
+            }
+        }
+        if (newDate && newDate !== r.ride_plan_date) {
+            // Only update date when raw message has a relative-date keyword.
+            const hasRelative = /\b(today|tomorrow|tonight|tmrw|yesterday|this\s+(weekend|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)|next\s+(weekend|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday))\b/i.test(r.raw_message);
+            if (hasRelative) changes.ride_plan_date = [r.ride_plan_date, newDate];
+        }
 
         if (Object.keys(changes).length === 0) continue;
         diffs.push({ id: r.id, raw: r.raw_message.slice(0, 80), changes });

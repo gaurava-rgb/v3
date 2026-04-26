@@ -177,11 +177,14 @@ async function parseMessage(message, senderName = '') {
 
         if (parsed.isRequest) {
             if (parsed.category === 'ride') {
-                // Backstop: explicit "from X to Y" overrides LLM extraction
-                const fromTo = message.match(/\bfrom\s+([A-Za-z][A-Za-z\s]{1,30}?)\s+to\s+([A-Za-z][A-Za-z\s]{1,30}?)(?=[\s,.!?]|$)/i);
-                if (fromTo) {
-                    parsed.origin = fromTo[1].trim();
-                    parsed.destination = fromTo[2].trim();
+                // Backstop: explicit "from <city>" overrides LLM origin only.
+                // Don't touch destination — LLM normalizes airports better than regex.
+                const fromMatch = message.match(/\bfrom\s+([A-Za-z][A-Za-z\s]{1,30}?)\s+to\b/i);
+                if (fromMatch) {
+                    const city = fromMatch[1].trim();
+                    if (city.toLowerCase() !== 'to' && city.length >= 2) {
+                        parsed.origin = city;
+                    }
                 }
                 if (!parsed.origin) parsed.origin = 'College Station';
             }
