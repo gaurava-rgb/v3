@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.8 | **Date:** Apr 24, 2026 | **App version:** 3.8.0
+**Version:** 1.9 | **Date:** Apr 27, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -316,6 +316,34 @@ Three session types, all coexist:
 
 ### Deployed
 - All 3 PM2 procs restarted after each change. Dash currently on commit `5ed557f`.
+
+---
+
+## Sprint 18 — Apr 27, 2026 (Parser Recovery + Model Upgrade)
+
+### Problem
+- 19 messages logged with `error` in `v3_message_log` Feb 25 - Apr 24 (0.7% failure rate)
+- All valid ride/housing requests dropped due to LLM returning malformed JSON
+- gpt-oss-20b:free occasionally produced unparseable output ("Expected ',' or '}'", "Unexpected token")
+- No retry/fallback mechanism — failed messages lost forever
+
+### Built
+- `reparse_errors.js` — fetches `v3_message_log WHERE error IS NOT NULL`, re-runs `parseMessage()`, inserts to `v3_requests`/`v3_housing`
+- Reusable for future recovery runs
+
+### Deployed
+- Model swap: `openai/gpt-oss-20b:free` → `minimax/minimax-m2.5:free` (better JSON output)
+- OpenRouter API key rotated (old key returned 401)
+- VPS `.env` updated via `ssh agconnect` + `sed -i` + `pm2 restart --update-env`
+- Recovery: 19 listings reparsed and inserted (some dedupe-suppressed)
+
+### Gotcha
+Local shell had stale `OPENROUTER_API_KEY` exported — overrode `dotenv.config()`. Must use `env -i` or explicit prefix to force fresh value. Same on VPS — `pm2 restart --update-env` flag required.
+
+### Open
+- Build retry queue (cron polls `v3_message_log WHERE error IS NOT NULL AND retry_count < 3`)
+- Consider fallback LLM provider (OpenAI direct, Anthropic) for OpenRouter outages
+- Monitor minimax error rate vs gpt-oss baseline
 
 ---
 
