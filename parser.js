@@ -12,9 +12,21 @@ const openai = new OpenAI({
 
 const MODEL = process.env.LLM_MODEL || 'meta-llama/llama-3.1-8b-instruct:free';
 
-function buildSystemPrompt() {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
-    const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' });
+function buildSystemPrompt(receivedAt = new Date()) {
+    const today = receivedAt.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+    const dayName = receivedAt.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' });
+    const hhmm = receivedAt.toLocaleTimeString('en-GB', {
+        timeZone: 'America/Chicago',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+    // Extract short TZ name (CDT vs CST) via formatToParts
+    const tzParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago',
+        timeZoneName: 'short'
+    }).formatToParts(receivedAt);
+    const tzShort = tzParts.find(p => p.type === 'timeZoneName')?.value || 'CT';
 
     return `You are a message parser for a university community platform at Texas A&M.
 Analyze WhatsApp messages and extract structured information.
@@ -45,8 +57,33 @@ When you detect a ride need or offer, return:
     "seats": number or null,
     "gasContribution": string or null,
     "description": string
-  }
+  },
+  "return_leg": { "date": "YYYY-MM-DD" or null, "ride_plan_time": "HH:MM" or null, "origin": "location" or null, "destination": "location" or null, "date_fuzzy": boolean, "time_fuzzy": boolean } or null
 }
+
+ROUND-TRIP DETECTION:
+If the message describes a round-trip (mentions "and back", "return ride", "return trip",
+"coming back", "both ways", or "↔"), populate return_leg with the reverse trip.
+- return_leg.origin = outbound destination
+- return_leg.destination = outbound origin
+- If only outbound details are given (e.g. "and back" with no return date), set the
+  inner return_leg fields to null but still populate the return_leg OBJECT (so we know
+  it's a round-trip).
+- For single-leg (one-way) messages, set return_leg to null EXPLICITLY (not undefined).
+
+Round-trip examples:
+- "Ride available from cstat to Dallas Friday And back from Dallas to cstat Sunday"
+  -> offer ride, origin=College Station, destination=Dallas, date=Friday,
+     return_leg: {date: Sunday, origin: "Dallas", destination: "College Station",
+                  date_fuzzy: false, time_fuzzy: true, ride_plan_time: null}
+- "Ride to Houston tomorrow morning and back same day"
+  -> offer ride, origin=College Station, destination=Houston, date=tomorrow,
+     return_leg: {date: <same as outbound>, origin: "Houston", destination: "College Station",
+                  date_fuzzy: false, time_fuzzy: true, ride_plan_time: null}
+- "Looking for ride to Houston Apr 23 and back Apr 25"
+  -> need ride, origin=College Station, destination=Houston, date=2026-04-23,
+     return_leg: {date: 2026-04-25, origin: "Houston", destination: "College Station",
+                  date_fuzzy: false, time_fuzzy: true, ride_plan_time: null}
 
 isRequest = true for BOTH needs (looking for a ride) AND offers (providing a ride).
 isRequest = false ONLY for casual chat (greetings, reactions, replies, thank yous).
@@ -96,7 +133,7 @@ Common housing patterns:
 - "need someone to take over my lease" -> housing, lease_transfer
 - "furnished room available June 1st, $650/mo, utilities included" -> housing, sublease
 
-Today is ${dayName}, ${today}. Resolve relative dates:
+Today is ${dayName}, ${today}. Current time: ${hhmm} ${tzShort}. Resolve relative dates:
 - "tomorrow" -> next day
 - "Friday" -> the upcoming Friday
 - "this weekend" -> upcoming Saturday
@@ -128,7 +165,7 @@ Default origin is "College Station" if not specified and category is ride.
 ONLY return valid JSON. No explanation, no markdown.`;
 }
 
-async function parseMessage(message, senderName = '') {
+async function parseMessage(message, senderName = '', receivedAt = new Date()) {
     if (!message || message.length < 5) {
         return { isRequest: false };
     }
@@ -145,7 +182,7 @@ async function parseMessage(message, senderName = '') {
 
     try {
         const llmMessages = [
-            { role: 'system', content: buildSystemPrompt() },
+            { role: 'system', content: buildSystemPrompt(receivedAt) },
             { role: 'user', content: `Message from ${senderName || 'user'}:\n"${message}"` }
         ];
 
@@ -196,7 +233,22 @@ async function parseMessage(message, senderName = '') {
                 parsed.ride_plan_time = parsed.ride_plan_time ?? null;
                 parsed.time_fuzzy     = parsed.time_fuzzy     ?? true;
 
-                console.log(`[Parser] Extracted: ${parsed.type} ${parsed.category} -> ${parsed.destination || 'N/A'} on ${parsed.date || 'N/A'} (date_fuzzy=${parsed.date_fuzzy}, time_fuzzy=${parsed.time_fuzzy})`);
+                // Round-trip: normalize return_leg if present, else explicit null
+                if (parsed.return_leg && typeof parsed.return_leg === 'object') {
+                    const rl = parsed.return_leg;
+                    parsed.return_leg = {
+                        date:           rl.date           ?? null,
+                        ride_plan_time: rl.ride_plan_time ?? null,
+                        origin:         rl.origin         ?? null,
+                        destination:    rl.destination    ?? null,
+                        date_fuzzy:     rl.date_fuzzy     ?? (rl.date == null),
+                        time_fuzzy:     rl.time_fuzzy     ?? (rl.ride_plan_time == null)
+                    };
+                } else {
+                    parsed.return_leg = null;
+                }
+
+                console.log(`[Parser] Extracted: ${parsed.type} ${parsed.category} -> ${parsed.destination || 'N/A'} on ${parsed.date || 'N/A'} (date_fuzzy=${parsed.date_fuzzy}, time_fuzzy=${parsed.time_fuzzy}${parsed.return_leg ? ', round-trip' : ''})`);
             } else if (parsed.category === 'housing') {
                 // Ensure housing sub-object always exists with null defaults
                 const h = parsed.housing || {};

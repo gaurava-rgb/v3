@@ -6,7 +6,7 @@
 var express = require('express');
 var router = express.Router();
 var { readClient } = require('../lib/supabase');
-var { escHtml, formatDate, formatTime, formatMsgTime, buildClusters, displayName, GA_TAG } = require('../lib/helpers');
+var { escHtml, formatDate, formatTime, formatMsgTime, fmtMsgTimeTz, fmtRideTimeTz, fmtRideDateTz, tzMeta, buildClusters, displayName, GA_TAG } = require('../lib/helpers');
 var { filterActiveRequests, buildTestGroupSet } = require('../lib/dateFilter');
 var { optionalAuth, getUserTier } = require('../middleware/auth');
 
@@ -28,13 +28,17 @@ function isArriving(cluster) {
 
 // Format a ride_plan_time value. Passes HH:MM through formatTime(),
 // leaves fuzzy labels (e.g. "evening", "morning") as-is.
-function fmtTime(t) {
+// tzPref + dateStr optional — when provided, will append parenthetical for non-CT viewers.
+function fmtTime(t, tzPref, dateStr) {
     if (!t) return '';
-    if (/^\d{1,2}:\d{2}$/.test(t)) return formatTime(t);
+    if (/^\d{1,2}:\d{2}$/.test(t)) {
+        if (tzPref && tzPref !== 'CT') return fmtRideTimeTz(t, tzPref, dateStr);
+        return formatTime(t);
+    }
     return t;
 }
 
-function timeRange(members) {
+function timeRange(members, tzPref, dateStr) {
     var times = [];
     for (var i = 0; i < members.length; i++) {
         if (members[i].ride_plan_time) times.push(members[i].ride_plan_time);
@@ -43,20 +47,20 @@ function timeRange(members) {
     // Prefer a range of concrete HH:MM times; fall back to the first fuzzy label.
     var hhmm = times.filter(function(t) { return /^\d{1,2}:\d{2}$/.test(t); }).sort();
     if (hhmm.length > 0) {
-        var first = formatTime(hhmm[0]);
-        var last = formatTime(hhmm[hhmm.length - 1]);
+        var first = fmtTime(hhmm[0], tzPref, dateStr);
+        var last  = fmtTime(hhmm[hhmm.length - 1], tzPref, dateStr);
         return first === last ? first : first + ' &ndash; ' + last;
     }
     return times[0];
 }
 
-function clusterSummary(cluster, tier) {
+function clusterSummary(cluster, tier, tzPref) {
     var offers = cluster.offers;
     var needs = cluster.needs;
     if (offers.length > 0) {
         var o = offers[0];
         var name = tier >= 2 ? escHtml(displayName(o, true)) : escHtml(displayName(o, false) || 'Someone');
-        var timeStr = o.ride_plan_time ? ' at ' + fmtTime(o.ride_plan_time) : '';
+        var timeStr = o.ride_plan_time ? ' at ' + fmtTime(o.ride_plan_time, tzPref, o.ride_plan_date) : '';
         var seats = o.raw_message && o.raw_message.match(/(\d)\s*seat/i);
         var seatStr = seats ? ' with ' + seats[1] + ' seats' : '';
         if (needs.length > 0) {
@@ -68,15 +72,15 @@ function clusterSummary(cluster, tier) {
     return needs.length + ' rider' + (needs.length > 1 ? 's' : '') + ' headed this way &mdash; no driver yet';
 }
 
-function personHtml(req, tier, userPhone, verifiedSet) {
+function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
     var isOffer = req.request_type === 'offer';
     var typeClass = isOffer ? 'offer' : 'need';
     var badge = isOffer ? '&#128663; Offering' : '&#9995; Looking';
     var name = tier >= 2 ? escHtml(displayName(req, true)) : escHtml(displayName(req, false) || 'Someone');
-    var timeStr = req.ride_plan_time ? fmtTime(req.ride_plan_time) : '&mdash;';
+    var timeStr = req.ride_plan_time ? fmtTime(req.ride_plan_time, tzPref, req.ride_plan_date) : '&mdash;';
     var msg = escHtml(req.raw_message || '');
     var group = escHtml(req.source_group_name || req.source_group || '');
-    var sent = req.created_at ? formatMsgTime(req.created_at) : '';
+    var sent = req.created_at ? fmtMsgTimeTz(req.created_at, tzPref) : '';
 
     // Verified poster tick — show for T1+T2 whenever poster phone in user_profiles
     var verifiedTick = '';
@@ -148,14 +152,14 @@ function personHtml(req, tier, userPhone, verifiedSet) {
     '</div>';
 }
 
-function clusterHtml(cluster, direction, tier, userPhone, verifiedSet) {
+function clusterHtml(cluster, direction, tier, userPhone, verifiedSet, tzPref) {
     var allMembers = cluster.offers.concat(cluster.needs);
     var from = escHtml(cluster.origin || '?');
     var to = escHtml(cluster.destination || '?');
     var offerCount = cluster.offers.length;
     var needCount = cluster.needs.length;
     var totalCount = allMembers.length;
-    var tRange = timeRange(allMembers);
+    var tRange = timeRange(allMembers, tzPref, cluster.repDate);
 
     var metaPills = '';
     if (offerCount > 0) metaPills += '<span class="pill pill-offer">&#128663; ' + offerCount + ' offering</span>';
@@ -166,8 +170,8 @@ function clusterHtml(cluster, direction, tier, userPhone, verifiedSet) {
 
     var personCards = '';
     // offers first, then needs
-    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone, verifiedSet);
-    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone, verifiedSet);
+    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone, verifiedSet, tzPref);
+    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone, verifiedSet, tzPref);
 
     var repDate = escHtml(cluster.repDate || '');
     return '<article class="cluster ' + direction + '" data-from="' + from + '" data-to="' + to + '" data-date="' + repDate + '" tabindex="0" role="button" aria-expanded="false">' +
@@ -175,7 +179,7 @@ function clusterHtml(cluster, direction, tier, userPhone, verifiedSet) {
             '<div class="cluster-info">' +
                 '<div class="cluster-route">' + from + ' <span class="cluster-arrow">&rarr;</span> ' + to + '</div>' +
                 '<div class="cluster-meta">' + metaPills + '</div>' +
-                '<div class="cluster-summary">' + clusterSummary(cluster, tier) + '</div>' +
+                '<div class="cluster-summary">' + clusterSummary(cluster, tier, tzPref) + '</div>' +
                 '<div class="expand-hint">Tap to see ' + totalCount + ' ' + (totalCount === 1 ? 'person' : 'people') + '</div>' +
             '</div>' +
             '<span class="cluster-chevron">&#9656;</span>' +
@@ -186,6 +190,18 @@ function clusterHtml(cluster, direction, tier, userPhone, verifiedSet) {
 
 router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
     try {
+        // ?tz=CT|ET|PT writes the cookie then redirects, stripping the param
+        if (req.query.tz === 'CT' || req.query.tz === 'ET' || req.query.tz === 'PT') {
+            res.cookie('tz_pref', req.query.tz, {
+                path: '/', sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000
+            });
+            var qs = Object.assign({}, req.query);
+            delete qs.tz;
+            var keys = Object.keys(qs);
+            var tail = keys.length ? '?' + keys.map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(qs[k]); }).join('&') : '';
+            return res.redirect(req.path + tail);
+        }
+        var tzPref = req.tzPref || 'CT';
         var tier = req.user ? req.user.tier : 0;
         var userPhone = req.user && req.user.phone ? req.user.phone.replace(/\D/g,'') : null;
         var userEmail = req.user ? req.user.email : '';
@@ -321,21 +337,21 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
             if (leaving.length > 0) {
                 dateBlocksHtml += '<div class="direction-label leaving">&#8593; Leaving College Station <span class="direction-count">(' + leavingCount + ')</span>' + (sectionHasVerified(leaving) ? DIR_LEGEND : '') + '</div>';
                 for (var li = 0; li < leaving.length; li++) {
-                    dateBlocksHtml += clusterHtml(leaving[li], 'leaving', tier, userPhone, verifiedSet);
+                    dateBlocksHtml += clusterHtml(leaving[li], 'leaving', tier, userPhone, verifiedSet, tzPref);
                 }
             }
 
             if (arriving.length > 0) {
                 dateBlocksHtml += '<div class="direction-label arriving">&#8595; Coming to College Station <span class="direction-count">(' + arrivingCount + ')</span>' + (sectionHasVerified(arriving) ? DIR_LEGEND : '') + '</div>';
                 for (var ari = 0; ari < arriving.length; ari++) {
-                    dateBlocksHtml += clusterHtml(arriving[ari], 'arriving', tier, userPhone, verifiedSet);
+                    dateBlocksHtml += clusterHtml(arriving[ari], 'arriving', tier, userPhone, verifiedSet, tzPref);
                 }
             }
 
             if (others.length > 0) {
                 dateBlocksHtml += '<div class="direction-label others">&#8646; Other Routes <span class="direction-count">(' + othersCount + ')</span>' + (sectionHasVerified(others) ? DIR_LEGEND : '') + '</div>';
                 for (var oi = 0; oi < others.length; oi++) {
-                    dateBlocksHtml += clusterHtml(others[oi], 'other', tier, userPhone, verifiedSet);
+                    dateBlocksHtml += clusterHtml(others[oi], 'other', tier, userPhone, verifiedSet, tzPref);
                 }
             }
 
@@ -350,14 +366,30 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
             '</strong> across <strong>' + activeGroupCount + ' WhatsApp group' + (activeGroupCount !== 1 ? 's' : '') +
             '</strong> this week';
 
-        res.send(PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, activeGroupCount, tier, userEmail, userPhone));
+        res.send(PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, activeGroupCount, tier, userEmail, userPhone, tzPref));
     } catch (err) {
         console.error('[Clusters] Error:', err);
         res.status(500).send('Internal error');
     }
 });
 
-function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, groupCount, tier, userEmail, userPhone) {
+function tzPillHtml(tzPref) {
+    function opt(v, label) {
+        return '<option value="' + v + '"' + (tzPref === v ? ' selected' : '') + '>' + label + '</option>';
+    }
+    return '<form method="get" action="" class="tz-pill" aria-label="Timezone preference">' +
+        '<label>Times: </label>' +
+        '<select name="tz" onchange="this.form.submit()">' +
+            opt('CT', 'Central') + opt('ET', 'Eastern') + opt('PT', 'Pacific') +
+        '</select></form>';
+}
+
+function tzFooterHtml(tzPref) {
+    var label = (tzMeta(tzPref) || {}).label || 'Central';
+    return '<div class="tz-footnote">Post times in ' + label + '. Ride times always in origin-city local.</div>';
+}
+
+function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, groupCount, tier, userEmail, userPhone, tzPref) {
     var authHtml;
     if (tier === 0) {
         authHtml = '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see contact details</div>';
@@ -392,13 +424,23 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
         '<title>Aggie Connect — Ride Clusters</title>\n' +
         '<style>\n' + CSS + '\n</style>\n</head>\n<body>\n' +
-        '<a href="/housing" class="page-switch-btn" title="Browse housing listings">&#127968; Housing</a>\n' +
+        '<div class="top-bar">' +
+            '<div class="page-switch-btn-wrap"><a href="/housing" class="page-switch-btn" title="Browse housing listings">&#127968; Housing</a></div>' +
+        '</div>\n' +
         '<div class="container">\n' +
         '<div class="hero"><h1>Aggie Connect</h1>' +
         '<p class="subtitle">' + subtitle + '</p>' +
         '<p class="tagline">Find someone going your way. Updated in real time from WhatsApp groups. <a href="/faq">FAQs &mdash; how, why, what?</a></p>' +
         '<p class="legend"><span class="verified-tick verified-tick-legend">' + VERIFIED_SVG + '</span> = Phone number verified</p>' +
         authHtml +
+        '<div class="now-wrap">' +
+            '<button type="button" class="now-pill" id="nowPill" data-tz="' + escHtml(tzPref) + '" aria-haspopup="true" aria-expanded="false" aria-label="Current time, click to change timezone"><span class="now-label">Now:</span> <span class="now-text-full" id="nowTextFull">--</span><span class="now-text-short" id="nowTextShort">--</span> <span class="now-caret">&#9660;</span></button>' +
+            '<div class="now-menu" id="nowMenu" role="menu">' +
+                '<div class="now-menu-item" role="menuitem" data-tz="CT"><span class="nm-zone">Central</span><span class="nm-time" data-tz-time="CT">--</span></div>' +
+                '<div class="now-menu-item" role="menuitem" data-tz="ET"><span class="nm-zone">Eastern</span><span class="nm-time" data-tz-time="ET">--</span></div>' +
+                '<div class="now-menu-item" role="menuitem" data-tz="PT"><span class="nm-zone">Pacific</span><span class="nm-time" data-tz-time="PT">--</span></div>' +
+            '</div>' +
+        '</div>' +
         '</div>\n' +
         bannerHtml +
 
@@ -426,6 +468,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         // Date blocks
         dateBlocksHtml +
 
+        tzFooterHtml(tzPref) +
         '<div class="footer">' + totalCount + ' total requests &middot; ' + groupCount + ' groups monitored &middot; <a href="/faq">FAQ</a> &middot; <a href="/terms">Terms</a> &middot; v3.8</div>\n' +
         '</div>\n<script>var _userEmail=' + JSON.stringify(userEmail||'') + ';var _userPhone=' + JSON.stringify(userPhone||'') + ';</script>\n<script>\n' + JS + '\n</script>\n</body>\n</html>';
 }
@@ -561,13 +604,41 @@ var CSS = [
 '.legend { font-size: 11px; color: var(--text-muted); margin-top: 4px; }',
 '.verified-tip { position: absolute; background: #111; color: #fff; font-size: 11px; font-weight: 600; padding: 6px 10px; border-radius: 6px; z-index: 500; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }',
 '.verified-tip::after { content: ""; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 4px solid #111; }',
-'.page-switch-btn { position: fixed; top: 14px; right: 16px; z-index: 300; display: inline-flex; align-items: center; gap: 5px; background: var(--card); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 99px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: box-shadow 0.15s, border-color 0.15s; white-space: nowrap; }',
+'.top-bar { position: absolute; top: 8px; right: 8px; z-index: 300; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 16px); }',
+'.tz-pill-wrap, .page-switch-btn-wrap, .now-pill-wrap { display: inline-flex; }',
+'.tz-pill { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #e5e5e5; color: #666; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }',
+'.tz-pill label { color: #999; font-weight: 500; cursor: default; }',
+'.tz-pill select { border: none; background: transparent; font: inherit; color: #1a1a1a; cursor: pointer; padding: 0 2px; outline: none; }',
+'.now-wrap { position: relative; display: inline-flex; margin: 6px 0; }',
+'.now-pill { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #e5e5e5; color: #444; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); white-space: nowrap; cursor: pointer; user-select: none; transition: border-color 0.15s, box-shadow 0.15s; font: inherit; }',
+'.now-pill:hover { border-color: #b3b3b3; box-shadow: 0 3px 12px rgba(0,0,0,0.12); }',
+'.now-pill[aria-expanded="true"] { border-color: #888; }',
+'.now-pill .now-label { color: #999; font-weight: 500; }',
+'.now-pill .now-caret { color: #bbb; font-size: 9px; margin-left: 2px; transition: transform 0.15s; }',
+'.now-text-short { display: none; }',
+'.now-text-full { display: inline; }',
+'.now-pill[aria-expanded="true"] .now-caret { transform: rotate(180deg); }',
+'.now-menu { position: absolute; top: calc(100% + 6px); left: 0; background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.12); padding: 4px; min-width: 220px; z-index: 400; display: none; }',
+'.now-menu.open { display: block; }',
+'.now-menu-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 7px; cursor: pointer; font-size: 12px; color: #333; }',
+'.now-menu-item:hover { background: #f5f5f5; }',
+'.now-menu-item .nm-zone { font-weight: 600; }',
+'.now-menu-item .nm-time { color: #666; font-variant-numeric: tabular-nums; }',
+'.now-menu-item.selected { background: #f0f4ff; }',
+'.now-menu-item.selected .nm-zone::before { content: "\\2713 "; color: #2563eb; }',
+'.now-menu-item.selected .nm-zone { color: #1e40af; }',
+'.tz-footnote { text-align: center; font-size: 11px; color: #999; margin: 24px 0 0; padding: 0 12px; }',
+'.page-switch-btn { display: inline-flex; align-items: center; gap: 5px; background: var(--card); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 99px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: box-shadow 0.15s, border-color 0.15s; white-space: nowrap; }',
 '.page-switch-btn:hover { border-color: #ccc; box-shadow: 0 3px 12px rgba(0,0,0,0.12); color: var(--text); }',
 '.footer { text-align: center; padding: 16px 0; font-size: 11px; color: #ccc; border-top: 1px solid #eee; margin-top: 20px; }',
 '.footer a { color: #aaa; text-decoration: none; }',
 '.footer a:hover { text-decoration: underline; }',
 '@media (max-width: 700px) {',
 '  .container { padding: 8px 8px 32px; }',
+'  .top-bar { right: 6px; top: 6px; gap: 4px; }',
+'  .now-pill, .page-switch-btn { font-size: 11px; padding: 3px 8px; }',
+'  .now-text-full { display: none; }',
+'  .now-text-short { display: inline; }',
 '  .hero h1 { font-size: 18px; }',
 '  .hero .tagline { display: none; }',
 '  .hero { margin-bottom: 8px; }',
@@ -653,7 +724,13 @@ var JS = [
 '  document.documentElement.style.setProperty("--sticky-dir-top", (filterH + dateLabelH) + "px");',
 '}',
 'setStickyOffsets();',
-'window.addEventListener("resize", setStickyOffsets);'
+'window.addEventListener("resize", setStickyOffsets);',
+'var TZ_MAP={CT:"America/Chicago",ET:"America/New_York",PT:"America/Los_Angeles"};',
+'function fmtNow(iana,full){var opts=full?{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZone:iana,timeZoneName:"short"}:{hour:"numeric",minute:"2-digit",timeZone:iana,timeZoneName:"short"};return new Intl.DateTimeFormat("en-US",opts).format(new Date());}',
+'function tickNowClock(){var el=document.getElementById("nowPill");if(!el)return;var pref=el.getAttribute("data-tz")||"CT";var iana=TZ_MAP[pref]||TZ_MAP.CT;var f=document.getElementById("nowTextFull");if(f)f.textContent=fmtNow(iana,true);var s=document.getElementById("nowTextShort");if(s)s.textContent=fmtNow(iana,false);var items=document.querySelectorAll("[data-tz-time]");for(var i=0;i<items.length;i++){var z=items[i].getAttribute("data-tz-time");items[i].textContent=fmtNow(TZ_MAP[z]||TZ_MAP.CT,false);}}',
+'tickNowClock();',
+'setInterval(tickNowClock,30000);',
+'(function(){var btn=document.getElementById("nowPill");var menu=document.getElementById("nowMenu");if(!btn||!menu)return;var cur=btn.getAttribute("data-tz")||"CT";var items=menu.querySelectorAll(".now-menu-item");for(var i=0;i<items.length;i++){if(items[i].getAttribute("data-tz")===cur)items[i].classList.add("selected");}function close(){menu.classList.remove("open");btn.setAttribute("aria-expanded","false");}function open(){menu.classList.add("open");btn.setAttribute("aria-expanded","true");}btn.addEventListener("click",function(e){e.stopPropagation();menu.classList.contains("open")?close():open();});items.forEach(function(it){it.addEventListener("click",function(){var z=it.getAttribute("data-tz");var u=new URL(window.location.href);u.searchParams.set("tz",z);window.location.href=u.toString();});});document.addEventListener("click",function(e){if(!menu.contains(e.target)&&e.target!==btn)close();});document.addEventListener("keydown",function(e){if(e.key==="Escape")close();});})();'
 ].join('\n');
 
 module.exports = router;

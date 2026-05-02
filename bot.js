@@ -149,7 +149,8 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
         origin:        parsed.origin,
         destination:   parsed.destination,
         details:       parsed.details || {},
-        rawMessage:    body
+        rawMessage:    body,
+        returnLeg:     parsed.return_leg
     });
 
     if (!request) return;

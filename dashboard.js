@@ -18,11 +18,18 @@ var app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// Attach req.tzPref ('CT' | 'ET' | 'PT') from cookie for all downstream routes.
+var { parseTzPref } = require('./lib/helpers');
+app.use(function(req, res, next) {
+    req.tzPref = parseTzPref(req);
+    next();
+});
+
 app.use('/public', express.static(__dirname + '/public'));
 
 // ── Routes ───────────────────────────────────────────────────────────────
 
-app.use(require('./routes/public'));
 app.use(require('./routes/clusters'));
 app.use(require('./routes/auth'));
 app.use(require('./routes/verify'));

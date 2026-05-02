@@ -192,14 +192,15 @@ async function messageAlreadyProcessed(waMessageId) {
 // Request Dedup
 // ============================================================
 
-function computeRequestHash({ sourceContact, type, category, destination, date }) {
+function computeRequestHash({ sourceContact, type, category, destination, date }, legSuffix = '') {
     const normDest = normalizeLocation(destination) || '';
     const parts = [
         sourceContact || '',
         type || '',
         category || '',
         normDest.toLowerCase(),
-        date || ''
+        date || '',
+        legSuffix || ''
     ].join('|');
     return crypto.createHash('sha256').update(parts).digest('hex').substring(0, 16);
 }
@@ -268,6 +269,62 @@ async function saveRequest(data) {
     }
 
     console.log(`[DB] Saved ${data.type} for ${data.category}: ${request.id}`);
+
+    // ── Round-trip: save the return leg as a sibling row ──────────────────
+    const rl = data.returnLeg;
+    if (rl && (rl.date != null || rl.origin != null || rl.destination != null)) {
+        const returnOrigin      = rl.origin      || normalizeLocation(data.destination);
+        const returnDestination = rl.destination || normalizeLocation(data.origin);
+        const returnDate        = rl.date ?? null;
+        const returnTime        = rl.ride_plan_time ?? null;
+        const returnDateFuzzy   = rl.date_fuzzy ?? (returnDate == null);
+        const returnTimeFuzzy   = rl.time_fuzzy ?? (returnTime == null);
+
+        const returnHash = computeRequestHash({
+            sourceContact: data.sourceContact,
+            type:          data.type,
+            category:      data.category,
+            destination:   returnDestination,
+            date:          returnDate
+        }, 'return');
+
+        const existingReturn = await findExistingRequest(returnHash);
+        if (existingReturn) {
+            console.log(`[DB] Duplicate return-leg suppressed for primary ${request.id} (existing ${existingReturn.id})`);
+        } else {
+            const { data: returnRow, error: returnErr } = await supabase
+                .from('v3_requests')
+                .insert({
+                    source: data.source || 'whatsapp-baileys-v3',
+                    source_group: data.sourceGroup,
+                    source_contact: data.sourceContact,
+                    sender_name: data.senderName || null,
+                    request_type: data.type,
+                    request_category: data.category,
+                    ride_plan_date: returnDate,
+                    ride_plan_time: returnTime,
+                    date_fuzzy:     returnDateFuzzy,
+                    possible_dates: [],
+                    time_fuzzy:     returnTimeFuzzy,
+                    request_origin: normalizeLocation(returnOrigin),
+                    request_destination: normalizeLocation(returnDestination),
+                    request_details: data.details || {},
+                    raw_message: data.rawMessage,
+                    request_status: 'open',
+                    request_hash: returnHash,
+                    roundtrip_parent_id: request.id
+                })
+                .select()
+                .single();
+
+            if (returnErr) {
+                console.error('[DB] Error saving return leg:', sanitizeError(returnErr.message));
+            } else {
+                console.log(`[DB] Saved return leg for ${request.id}: ${returnRow.id}`);
+            }
+        }
+    }
+
     return request;
 }
 

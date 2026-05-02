@@ -102,3 +102,4 @@ CREATE INDEX IF NOT EXISTS idx_outbound_contact ON outbound_queue(contact);
 -- Run these if the table already exists without these columns.
 
 ALTER TABLE v3_requests ADD COLUMN IF NOT EXISTS sender_name TEXT;
+ALTER TABLE v3_requests ADD COLUMN IF NOT EXISTS roundtrip_parent_id UUID REFERENCES v3_requests(id) ON DELETE SET NULL;

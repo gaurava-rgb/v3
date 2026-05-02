@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.9 | **Date:** Apr 27, 2026 | **App version:** 3.8.0
+**Version:** 1.10 | **Date:** May 1, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -316,6 +316,35 @@ Three session types, all coexist:
 
 ### Deployed
 - All 3 PM2 procs restarted after each change. Dash currently on commit `5ed557f`.
+
+---
+
+## Sprint 19 — May 1, 2026 (Round-trip Parser + TZ Toggle + /old-home Removal)
+
+### Built
+- **Parser**: `return_leg` field added to ride schema. Detects "and back", "return ride", "↔" patterns. `parseMessage(message, senderName, receivedAt)` — receivedAt arg for backfill use. 3 few-shot examples in prompt. `parser.js` ~50 lines added.
+- **db.js**: `saveRequest` accepts `data.returnLeg`; inserts second row with swapped origin/destination + `roundtrip_parent_id` link. Hash uses `:return` suffix to bypass dedup. ~58 lines.
+- **bot.js**: 1-line addition `returnLeg: parsed.return_leg` in saveRequest call. Nothing else touched.
+- **schema.sql**: `ALTER TABLE v3_requests ADD COLUMN IF NOT EXISTS roundtrip_parent_id UUID REFERENCES v3_requests(id) ON DELETE SET NULL;` — **MUST RUN ON SUPABASE BEFORE DEPLOY**
+- **TZ toggle**: 3-zone (CT/ET/PT) viewer-selectable. Cookie `tz_pref`. helpers.js: `parseTzPref`, `tzMeta`, `fmtMsgTimeTz`, `fmtRideTimeTz`. Post times shift to viewer TZ + Central bracket. Ride times anchored Central + viewer-TZ bracket. Live "Now" pill clock ticks 30s, click expands menu showing all 3 zones with current local time + ✓ on selected. Inline in hero (not sticky — scrolls with page).
+- **Footer ref line**: "Post times in [Central]. Ride times always in origin-city local."
+- **Removed**: `routes/public.js` deleted (only had `/old-home`). Unmounted from dashboard.js. `/old-home` → 404.
+
+### Sites covered
+- `/` (clusters), `/housing` — full toggle + Now pill
+
+### Backfill (deferred)
+- 2 existing future round-trips identified (AM cstat→Dallas 5/1, Haet IAH↔CSTAT 5/9-5/10). Manual backfill later.
+
+### Open (low priority)
+- **`/profile` TZ toggle** — match cards + listings still use `formatMsgTime` (Central only). 4 call sites in `lib/views.js` (lines ~564, 577, 616, 700). Wire `fmtMsgTimeTz(ts, tzPref)` + add Now pill to profile hero. P3.
+- Schema ALTER not yet run on prod Supabase
+- Backfill of existing round-trips (~2 rows)
+- "+ Post a ride" button — backend `POST /submit` still mounted but UI gone after old-home removal. Add link from clusters/housing top-bar if needed.
+- /verify, /auth, /faq, /terms — no time displays, no work needed
+
+### Verified locally
+- Boot OK on port 3004. Now pill renders inline in hero. Menu opens, ✓ on selected zone, click cycles. /old-home → 404.
 
 ---
 

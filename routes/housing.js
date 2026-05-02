@@ -17,6 +17,18 @@ async function fetchVerifiedSet() {
 
 router.get('/housing', optionalAuth, async function(req, res) {
     try {
+        // ?tz=CT|ET|PT writes the cookie then redirects, stripping the param
+        if (req.query.tz === 'CT' || req.query.tz === 'ET' || req.query.tz === 'PT') {
+            res.cookie('tz_pref', req.query.tz, {
+                path: '/', sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000
+            });
+            var qs = Object.assign({}, req.query);
+            delete qs.tz;
+            var keys = Object.keys(qs);
+            var tail = keys.length ? '?' + keys.map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(qs[k]); }).join('&') : '';
+            return res.redirect(req.path + tail);
+        }
+        var tzPref = req.tzPref || 'CT';
         var listings = await getActiveListings({ listing_type: null }); // always fetch all
         var tier = 0;
         if (req.user) {
@@ -36,7 +48,7 @@ router.get('/housing', optionalAuth, async function(req, res) {
                 if (p) verifiedSet.add(p);
             });
         }
-        var html = renderHousingBoard(listings, req.query.type || 'all', tier, userEmail, userPhone, verifiedSet);
+        var html = renderHousingBoard(listings, req.query.type || 'all', tier, userEmail, userPhone, verifiedSet, tzPref);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
     } catch (err) {
