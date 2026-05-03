@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.11 | **Date:** May 3, 2026 | **App version:** 3.8.0
+**Version:** 1.12 | **Date:** May 3, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -316,6 +316,39 @@ Three session types, all coexist:
 
 ### Deployed
 - All 3 PM2 procs restarted after each change. Dash currently on commit `5ed557f`.
+
+---
+
+## Sprint 20.2 — May 3, 2026 (Drop Flexible Lane + Sender Fallback) — DEPLOYED `7f6d3a3`
+
+### Built
+- **routes/clusters.js**: dateless clusters dropped from /clusters render. Fan-out from 20.1 surfaces flexible rides on each concrete candidate date with FLEXIBLE tag. Catch-all "Flexible" date lane removed.
+- **lib/helpers.js displayName()**: literal `'Unknown'` sender_name treated as null. Falls back to phone (T2) or "Someone" (T0/T1). Fixes cards displaying "Unknown" when WhatsApp didn't broadcast pushName at original insert time.
+
+### Root cause investigation
+- "Unknown" cards in fan-out output had original-row sender_name='Unknown' (bot.js fallback when pushName missing).
+- `wa_contacts` row had phone but `name=null` (no name source ever resolved).
+- Fan-out copied faithfully — not a fan-out bug.
+
+### Open / low-priority
+- bot.js still writes literal 'Unknown' string for missing pushName. UI patch covers all cases; insert-time fix deferred.
+
+---
+
+## Sprint 20.1 — May 3, 2026 (Flexible-date Fan-out) — DEPLOYED `a3d815f`
+
+### Built
+- **db.js saveRequest**: when `date=null && possible_dates.length >= 2 && category='ride'`, fans out to N rows (one per candidate date) with `flexible` tag. Skips return-leg fan-out.
+- **parser.js**: `flexible` added to tag whitelist.
+- **routes/clusters.js**: renders `FLEXIBLE` label in tag slot.
+- **backfill_flexible.js (new)**: one-shot script. Finds dateless `status=open` ride rows w/ ≥1 future possible_date, not round-trip parents/children. Inserts N sibling rows; retires originals (`status='expanded'`).
+
+### Backfill result
+5 originals retired → 7 new rows: CS→San Antonio (June 1, Aug 31), CS→Dallas (May 3), CS→Roanoke (May 3), CS→Dallas (May 3), Austin→Dallas (May 4, May 5).
+
+### Investigated 14 dateless rows in /clusters
+- 9 genuinely flexible (date_fuzzy=true ranges) — fan-out
+- 5 parse bugs / oddities (March-typo dates, round-trip date null, null dest) — left alone, separate fix needed
 
 ---
 
