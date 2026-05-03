@@ -262,17 +262,17 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
         var totalCount = allReqs.length;
         var clusters = buildClusters(allReqs, true);
 
-        // Group clusters by date
+        // Group clusters by date — drop dateless clusters; fan-out covers
+        // flexible rides on each candidate date with the FLEXIBLE tag.
         var byDate = {};
         for (var ci = 0; ci < clusters.length; ci++) {
-            var dk = clusters[ci].repDate || 'flexible';
+            if (!clusters[ci].repDate) continue;
+            var dk = clusters[ci].repDate;
             if (!byDate[dk]) byDate[dk] = [];
             byDate[dk].push(clusters[ci]);
         }
 
         var sortedDates = Object.keys(byDate).sort(function(a, b) {
-            if (a === 'flexible') return 1;
-            if (b === 'flexible') return -1;
             return a.localeCompare(b);
         });
 
@@ -300,7 +300,7 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
         for (var di = 0; di < sortedDates.length; di++) {
             var dateKey = sortedDates[di];
             var dateClusters = byDate[dateKey];
-            var dateLabel = formatDate(dateKey === 'flexible' ? null : dateKey);
+            var dateLabel = formatDate(dateKey);
             var isToday = dateKey === today;
 
             // Split into leaving / arriving / other routes
