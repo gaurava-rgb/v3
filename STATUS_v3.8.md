@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.10 | **Date:** May 1, 2026 | **App version:** 3.8.0
+**Version:** 1.11 | **Date:** May 3, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -319,7 +319,44 @@ Three session types, all coexist:
 
 ---
 
-## Sprint 19 — May 1, 2026 (Round-trip Parser + TZ Toggle + /old-home Removal)
+## Sprint 20 — May 3, 2026 (City-bucket Collapse + Tag Labels) — DEPLOYED `5aaeef8`
+
+### Problem
+Houston/IAH leakage: ~19% of "Houston" rides mistagged `Houston IAH` (LLM over-promoted bare "Houston"). Same disease in Dallas/DFW (~64% leak). Two-bucket split per metro caused matching/visibility bugs.
+
+### Built
+- **parser.js**: replaced normalize block. Single bucket per metro: Houston / Dallas / Austin / Fort Worth (split out). New `tags` field: `["airport"|"uscis"|"dps"|"ssn"]`. DPS-Bryan + SSN-Bryan inference rules. Post-parse whitelist filter on tags.
+- **normalize.js**: dropped `Houston IAH`/`Houston Hobby`/`Dallas DFW`/`Austin Airport` keys. Folded variants under city. Added `Fort Worth`. NEARBY_PAIRS trimmed to `(CS,Bryan)` + `(Dallas,Fort Worth)`.
+- **db.js**: persists `tags` array on primary + return-leg rows.
+- **bot.js**: passes `parsed.tags` to saveRequest.
+- **routes/clusters.js**: renders top-right text tag (`AIRPORT` / `USCIS` / `DPS` / `SSN`). Plain gray pill, slash-joined for multi-tag.
+- **backfill_tags.js**: utility to re-parse future ride rows (`ride_plan_date >= today_central`). Skips return-leg children. Retries parse errors 3x. Never overwrites on failure or not-a-ride. Dry-run mode.
+
+### Schema
+`ALTER TABLE v3_requests ADD COLUMN tags TEXT[] DEFAULT '{}';` — applied prior to deploy.
+
+### Live model swap
+`LLM_MODEL`: `minimax/minimax-m2.5:free` → `openai/gpt-4o-mini` (both .env + VPS .env). Reason: paid minimax flaked ~40% on JSON output; 4o-mini scored 24/77 backfill rows clean (0 errors, 0 false-negatives).
+
+### Backfill
+- Pass 1 (paid minimax): 13 updates, 33 false-negative not-a-rides (left untouched).
+- Pass 2 (gpt-4o-mini): 24 updates, 0 errors, 0 false-negatives.
+- Total ~37 future rows fixed. Caught 1 return-leg swap bug → reverted + script patched to skip `roundtrip_parent_id IS NOT NULL`.
+
+### Tests
+- 25/25 pass on Houston-only cases
+- 24/28 pass on cross-city extended (Houston/Dallas/Austin/Fort Worth/Bryan + airport/uscis/dps/ssn). 4 fails were missing-origin defaults, not tag/dest.
+
+### Files touched
+parser.js, normalize.js, db.js, bot.js, routes/clusters.js, backfill_tags.js (new), test_houston_tags.js (new), test_dest_tags.js (new), .env (LLM_MODEL)
+
+### Open / known gaps
+- "Flexible" bucket on /clusters mixes genuine `date_fuzzy=true` rides with parse-miss rows where date is null. Split into "Flexible date" vs "Date unknown" deferred. Backfill of `ride_plan_date IS NULL` future rows with 4o-mini also deferred.
+- Round-trip tag (visibility-only label, FK still primary): parked.
+
+---
+
+## Sprint 19 — May 1-2, 2026 (Round-trip Parser + TZ Toggle + /old-home Removal) — DEPLOYED `2bab83c`
 
 ### Built
 - **Parser**: `return_leg` field added to ride schema. Detects "and back", "return ride", "↔" patterns. `parseMessage(message, senderName, receivedAt)` — receivedAt arg for backfill use. 3 few-shot examples in prompt. `parser.js` ~50 lines added.
