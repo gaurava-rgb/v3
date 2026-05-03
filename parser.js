@@ -58,6 +58,7 @@ When you detect a ride need or offer, return:
     "gasContribution": string or null,
     "description": string
   },
+  "tags": ["airport"|"uscis"|"dps"|"ssn", ...],
   "return_leg": { "date": "YYYY-MM-DD" or null, "ride_plan_time": "HH:MM" or null, "origin": "location" or null, "destination": "location" or null, "date_fuzzy": boolean, "time_fuzzy": boolean } or null
 }
 
@@ -154,11 +155,28 @@ TIME:
 - Approximate ("around 3", "afternoon", "morning") -> time_fuzzy: true, ride_plan_time: best guess or null
 - Not mentioned at all -> ride_plan_time: null, time_fuzzy: true
 
-Normalize destinations:
-- "Houston airport" / "IAH" / "Bush" -> "Houston IAH"
-- "Hobby" -> "Houston Hobby"
-- "DFW" / "Dallas airport" -> "Dallas DFW"
-- "CS" / "cstat" / "College Station" -> "College Station"
+CITIES (use exactly these names — single bucket per metro):
+- "College Station" — for: CS, cstat, c station, college station
+- "Bryan" — for: bryan, BCS (when context is Bryan side)
+- "Houston" — for ALL Houston-area destinations (IAH, Bush, Hobby, downtown). Do NOT split.
+- "Dallas" — for Dallas, Plano, Richardson, Frisco, Irving, Arlington, McKinney, Denton (Dallas metro). Do NOT split into "Dallas DFW".
+- "Fort Worth" — separate city, NOT Dallas
+- "Austin" — for: austin, ATX, Round Rock. Do NOT split into "Austin Airport".
+- "San Antonio"
+
+TAGS (apply only when message explicitly mentions these tokens):
+- "airport" — IAH, Bush, Hobby, DFW, "<city> airport", flight, fly out, pickup at airport
+- "uscis" — USCIS, biometrics, immigration appointment, OPT biometrics
+- "dps" — DPS, "driver license", "license test", "road test", "Texas DPS"
+- "ssn" — SSN, SSA, Social Security, social security office
+
+TAG RULES:
+- Bare city name with no tag-token in message → tags=[]
+- DPS office is in Bryan, TX → if "DPS" mentioned and no other city given, destination="Bryan", tags=["dps"]
+- SSA office is in Bryan, TX → if "SSN"/"SSA"/"social security" mentioned and no other city given, destination="Bryan", tags=["ssn"]
+- Multiple tags allowed when both tokens present (rare)
+- Apply tags symmetrically: "from IAH to CS" → origin="Houston", destination="College Station", tags=["airport"]
+- For one-way messages with no tag-tokens, return tags=[] (NOT null)
 
 Default origin is "College Station" if not specified and category is ride.
 
@@ -232,6 +250,7 @@ async function parseMessage(message, senderName = '', receivedAt = new Date()) {
                 parsed.possible_dates = parsed.possible_dates ?? [];
                 parsed.ride_plan_time = parsed.ride_plan_time ?? null;
                 parsed.time_fuzzy     = parsed.time_fuzzy     ?? true;
+                parsed.tags           = Array.isArray(parsed.tags) ? parsed.tags.filter(t => ['airport','uscis','dps','ssn'].includes(t)) : [];
 
                 // Round-trip: normalize return_leg if present, else explicit null
                 if (parsed.return_leg && typeof parsed.return_leg === 'object') {

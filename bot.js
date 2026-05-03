@@ -150,6 +150,7 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
         destination:   parsed.destination,
         details:       parsed.details || {},
         rawMessage:    body,
+        tags:          parsed.tags || [],
         returnLeg:     parsed.return_leg
     });
 

@@ -5,20 +5,17 @@
  */
 
 const LOCATION_MAP = {
-    'Houston IAH': [
-        'iah', 'bush', 'george bush', 'houston airport', 'houston intl',
+    'Houston': [
+        'houston', 'iah', 'bush', 'george bush', 'houston airport', 'houston intl',
         'iah (houston airport)', 'iah (houston)', 'houston iah',
-        'bush intercontinental'
+        'bush intercontinental', 'hobby', 'hou airport', 'houston hobby'
     ],
-    'Houston Hobby': ['hobby', 'hou airport'],
-    'Houston': ['houston'],
-    'Dallas DFW': [
-        'dfw', 'dallas airport', 'dallas/fort worth', 'dallas fort worth',
-        'dallas-fort worth'
+    'Dallas': [
+        'dallas', 'plano', 'richardson', 'frisco', 'irving', 'arlington', 'mckinney', 'denton',
+        'dfw', 'dallas airport', 'dallas dfw'
     ],
-    'Dallas': ['dallas', 'plano', 'richardson', 'frisco', 'irving'],
-    'Austin': ['austin'],
-    'Austin Airport': ['austin airport', 'austin-bergstrom', 'abia', 'aus airport'],
+    'Fort Worth': ['fort worth', 'ft worth', 'ftw'],
+    'Austin': ['austin', 'atx', 'round rock', 'austin airport', 'austin-bergstrom', 'abia', 'aus airport'],
     'San Antonio': ['san antonio', 'sa'],
     'College Station': ['cs', 'cstat', 'c station', 'college station'],
     'Bryan': ['bryan', 'bcs']
@@ -53,11 +50,7 @@ const KNOWN_LOCATIONS = new Set(Object.keys(LOCATION_MAP));
 // Pairs of locations close enough to still be a useful match (with a small penalty)
 const NEARBY_PAIRS = [
     new Set(['College Station', 'Bryan']),
-    new Set(['Houston IAH', 'Houston Hobby']),
-    new Set(['Houston IAH', 'Houston']),
-    new Set(['Houston Hobby', 'Houston']),
-    new Set(['Dallas DFW', 'Dallas']),
-    new Set(['Austin Airport', 'Austin']),
+    new Set(['Dallas', 'Fort Worth']),
 ];
 
 function areNearby(a, b) {

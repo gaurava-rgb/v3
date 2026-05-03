@@ -257,6 +257,7 @@ async function saveRequest(data) {
             request_destination: normDest,
             request_details: data.details || {},
             raw_message: data.rawMessage,
+            tags: Array.isArray(data.tags) ? data.tags : [],
             request_status: 'open',
             request_hash: hash
         })
@@ -310,6 +311,7 @@ async function saveRequest(data) {
                     request_destination: normalizeLocation(returnDestination),
                     request_details: data.details || {},
                     raw_message: data.rawMessage,
+                    tags: Array.isArray(data.tags) ? data.tags : [],
                     request_status: 'open',
                     request_hash: returnHash,
                     roundtrip_parent_id: request.id

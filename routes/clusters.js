@@ -82,6 +82,13 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
     var group = escHtml(req.source_group_name || req.source_group || '');
     var sent = req.created_at ? fmtMsgTimeTz(req.created_at, tzPref) : '';
 
+    var tagLabels = { airport: 'AIRPORT', uscis: 'USCIS', dps: 'DPS', ssn: 'SSN' };
+    var tagsHtml = '';
+    if (Array.isArray(req.tags) && req.tags.length) {
+        var labelStr = req.tags.map(function(t){ return tagLabels[t] || ''; }).filter(Boolean).join(' / ');
+        if (labelStr) tagsHtml = '<span class="person-tag">' + labelStr + '</span>';
+    }
+
     // Verified poster tick — show for T1+T2 whenever poster phone in user_profiles
     var verifiedTick = '';
     if (tier >= 1 && verifiedSet && req.source_contact) {
@@ -145,6 +152,8 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
         '<div class="person-top">' +
             '<span class="type-badge ' + typeClass + '">' + badge + '</span>' +
             '<span class="person-name">' + name + verifiedTick + yourPostBadge + '</span>' +
+            '<span class="person-spacer"></span>' +
+            tagsHtml +
             '<span class="person-depart">' + (req.ride_plan_time ? timeStr : '&mdash;') + '</span>' +
         '</div>' +
         msgHtml +
@@ -588,7 +597,9 @@ var CSS = [
 '.type-badge.offer { background: #dbeafe; color: #1d4ed8; }',
 '.type-badge.need { background: #fef3c7; color: #92400e; }',
 '.person-name { font-size: 14px; font-weight: 600; color: var(--text); }',
-'.person-depart { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }',
+'.person-spacer { margin-left: auto; }',
+'.person-tag { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: #6b7280; background: #f3f4f6; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }',
+'.person-depart { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }',
 '.person-msg { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }',
 '.person-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }',
 '.person-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }',
