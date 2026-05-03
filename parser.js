@@ -250,7 +250,7 @@ async function parseMessage(message, senderName = '', receivedAt = new Date()) {
                 parsed.possible_dates = parsed.possible_dates ?? [];
                 parsed.ride_plan_time = parsed.ride_plan_time ?? null;
                 parsed.time_fuzzy     = parsed.time_fuzzy     ?? true;
-                parsed.tags           = Array.isArray(parsed.tags) ? parsed.tags.filter(t => ['airport','uscis','dps','ssn'].includes(t)) : [];
+                parsed.tags           = Array.isArray(parsed.tags) ? parsed.tags.filter(t => ['airport','uscis','dps','ssn','flexible'].includes(t)) : [];
 
                 // Round-trip: normalize return_leg if present, else explicit null
                 if (parsed.return_leg && typeof parsed.return_leg === 'object') {

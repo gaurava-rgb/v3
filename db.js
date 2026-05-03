@@ -222,6 +222,67 @@ async function findExistingRequest(hash) {
 // ============================================================
 
 async function saveRequest(data) {
+    // ── Fan-out: when date is null AND possible_dates has 2+ candidates,
+    //    insert one row per candidate date with `flexible` tag. Skip return-leg
+    //    in this branch (round-trips don't fan out).
+    const possible = Array.isArray(data.possibleDates) ? data.possibleDates : [];
+    const isFanOut = !data.date && possible.length >= 2 && data.category === 'ride';
+    if (isFanOut) {
+        const baseTags = Array.isArray(data.tags) ? data.tags.slice() : [];
+        if (!baseTags.includes('flexible')) baseTags.push('flexible');
+        const normOrigin = normalizeLocation(data.origin);
+        const normDest = normalizeLocation(data.destination);
+        const inserted = [];
+        for (const d of possible) {
+            const h = computeRequestHash({
+                sourceContact: data.sourceContact,
+                type: data.type,
+                category: data.category,
+                destination: data.destination,
+                date: d
+            });
+            const existing = await findExistingRequest(h);
+            if (existing) {
+                console.log(`[DB] Fan-out dup suppressed: ${data.sourceContact} → ${data.destination || 'N/A'} on ${d}`);
+                continue;
+            }
+            const { data: row, error: rowErr } = await supabase
+                .from('v3_requests')
+                .insert({
+                    source: data.source || 'whatsapp-baileys-v3',
+                    source_group: data.sourceGroup,
+                    source_contact: data.sourceContact,
+                    sender_name: data.senderName || null,
+                    request_type: data.type,
+                    request_category: data.category,
+                    ride_plan_date: d,
+                    ride_plan_time: data.ridePlanTime || null,
+                    date_fuzzy: true,
+                    possible_dates: possible,
+                    time_fuzzy: data.timeFuzzy ?? true,
+                    request_origin: normOrigin,
+                    request_destination: normDest,
+                    request_details: data.details || {},
+                    raw_message: data.rawMessage,
+                    tags: baseTags,
+                    request_status: 'open',
+                    request_hash: h
+                })
+                .select()
+                .single();
+            if (rowErr) {
+                console.error('[DB] Fan-out insert error for date ' + d + ':', sanitizeError(rowErr.message));
+                continue;
+            }
+            inserted.push(row);
+        }
+        if (inserted.length) {
+            console.log(`[DB] Fan-out inserted ${inserted.length} flexible rows (${data.type} ${data.category} → ${data.destination})`);
+            return inserted[0];
+        }
+        return null;
+    }
+
     const hash = computeRequestHash({
         sourceContact: data.sourceContact,
         type: data.type,

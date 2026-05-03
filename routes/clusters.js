@@ -82,7 +82,7 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
     var group = escHtml(req.source_group_name || req.source_group || '');
     var sent = req.created_at ? fmtMsgTimeTz(req.created_at, tzPref) : '';
 
-    var tagLabels = { airport: 'AIRPORT', uscis: 'USCIS', dps: 'DPS', ssn: 'SSN' };
+    var tagLabels = { airport: 'AIRPORT', uscis: 'USCIS', dps: 'DPS', ssn: 'SSN', flexible: 'FLEXIBLE' };
     var tagsHtml = '';
     if (Array.isArray(req.tags) && req.tags.length) {
         var labelStr = req.tags.map(function(t){ return tagLabels[t] || ''; }).filter(Boolean).join(' / ');
