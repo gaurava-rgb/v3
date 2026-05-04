@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.12 | **Date:** May 3, 2026 | **App version:** 3.8.0
+**Version:** 1.14 | **Date:** May 4, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -319,6 +319,44 @@ Three session types, all coexist:
 
 ---
 
+## May 4, 2026 — Post-a-Ride FAB + Profile Fixes + Cluster Dedup
+
+### Post-a-Ride FAB + modal (routes/clusters.js, lib/views.js, routes/submit.js, routes/auth.js)
+- Maroon FAB fixed bottom-right; opens modal overlay
+- T0: sign-in prompt only (no form)
+- T1: form visible, submit hidden; green "Verify your number to post" CTA opens `/verify/wa` in new tab; modal polls `/api/session-tier` every 3s; on T2 upgrade, unlocks form in-place (pmUnlockForm), shows verified flash, auto-fills phone
+- T2: full form, name + phone pre-filled from profile
+- Fields: type radio (need/offer), origin/destination dropdowns (CS/Bryan/Houston/Dallas/Fort Worth/Austin/Other), date, time (optional), description (required), name, phone (no + needed; inputmode=numeric; hints for US + India format)
+- Backend gate: `req.user.tier < 2` → 403 (prevents T1 posting even if form bypassed)
+- Submit → redirect to `/profile?submitted=1&matches=N`
+- Profile page shows green submitted banner with match count
+
+### Profile page — submitted banner
+- Green banner appears when `?submitted=1` query param present
+- Shows match count; links to homepage if matches > 0
+
+### Auth dev helper
+- `GET /dev/fake-wa` (dev only) — simulates Kapso WA verify callback; reads `wa_verify_token` cookie, marks verified with test phone, links to profile. Accepts `?phone=` param.
+- `/login` relaxed in dev mode to accept any valid email (not just @tamu.edu)
+- `GET /api/session-tier` added to `routes/auth.js` — returns `{tier, phone}` for modal polling
+
+### Profile rides fix (lib/data.js)
+- `fetchUserListings` was using `readClient` — on VPS this is anon key, RLS blocks `.in('source_contact', phones)`, silently returns null
+- Fixed: switched to `writeClient` (service key, bypasses RLS)
+- Also removed `status` from select — column doesn't exist on `v3_requests`, caused silent null-data error
+
+### Cluster dedup (lib/helpers.js buildClusters)
+- Fan-out creates two rows (e.g. May 4 + May 5) for "today/tomorrow" messages; both land in same cluster via `datesOverlap` → same person shown twice
+- Also: old stale posts from same contact + route + date show alongside newer one
+- Fix: within each cluster group, keep only most recent `created_at` per `source_contact` before splitting into offers/needs
+
+### Commits
+- `652f6d4` — phone field UX (no + needed, country code hint)
+- `7eb7cef` — profile rides fix (writeClient + drop status column)
+- `024980d` — cluster dedup (one row per contact per cluster)
+
+---
+
 ## Sprint 20.2 — May 3, 2026 (Drop Flexible Lane + Sender Fallback) — DEPLOYED `7f6d3a3`
 
 ### Built
@@ -460,8 +498,22 @@ Local shell had stale `OPENROUTER_API_KEY` exported — overrode `dotenv.config(
 
 ---
 
+## May 4 2026 — Share Button on Own Ride Cards — DEPLOYED `eda6e52`
+
+### Built
+- Share button on T2 own-post person cards (where "Your post" badge shows). Button occupies the WA Message button slot (which is absent on own posts).
+- Copy text: `"{Origin} → {Destination} · {Month Day}\n{URL}"`. Native share sheet on mobile, clipboard + "Copied!" flash on desktop.
+- Deep link: `/?from=X&to=Y&date=YYYY-MM-DD` — on page load JS finds matching cluster, opens it, smooth-scrolls, cleans URL via `history.replaceState`.
+- T0/T1 landing on shared links see normal tier-gated content (no bypass).
+
+### Bug fixed (commit `eda6e52`)
+`"\n"` inside a Node.js single-quoted JS-as-string renders as a literal newline byte in the `<script>` block → invalid string literal → entire script killed (all onclick handlers including `toggleCluster` dead). Fixed to `"\\n"`. Key lesson: `node --check` validates the outer Node.js file, not the JS strings inside it.
+
+---
+
 ## Known Gaps / Debt
 
+- **Duplicate ride dedup bug (parked, needs design)** — Two root causes: (1) `computeRequestHash` uses raw LLM date string before ISO normalization; Supabase coerces both to ISO on write so hashes differ for same logical date. (2) `findExistingRequest` only checks `request_status = 'open'`; once row is matched/closed, same ride re-sent by same person bypasses dedup. Fix: normalize date to ISO before hashing + broaden status check (all statuses or last-N-days window). Confirmed via Joy's two CS→Houston May 6 rows (hashes `44625c247a8b8922` vs `2ec562b63616345a`).
 - `outbound_queue` — 6mo old, fully schemed, only used for OTP. Match notifications never implemented.
 - `MATCH_THRESHOLD` env — exists, never tuned in prod (default 0.5)
 - `wa_otp_codes` — superseded by `wa_verify_tokens` (Sprint 11). Old table still exists, can be dropped later.
