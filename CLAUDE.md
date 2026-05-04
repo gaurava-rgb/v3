@@ -61,3 +61,8 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - Keep changes minimal and incremental
 - Test locally before suggesting VPS deploy
 - The `archive/` folder has historical docs — don't read them unless asked
+
+## JS-in-HTML Pattern (routes/clusters.js, lib/views.js)
+Browser JS is built as a Node.js string array and joined into a `<script>` block. `node --check` validates the outer Node.js file — it does NOT validate the JS inside the strings.
+- **Never use `"\n"` inside these strings** — it renders as a literal newline in the script block, breaking string literals and killing the entire script. Use `"\\n"` instead.
+- After any edit to the JS array, extract the rendered script and run `node --check` on it: `curl -s https://ridesplit.app/ | python3 -c "import re,sys; s=re.findall(r'<script>(.*?)</script>',sys.stdin.read(),re.DOTALL); [open('/tmp/t.js','w').write(x) for x in s if 'toggleCluster' in x]" && node --check /tmp/t.js`
