@@ -232,4 +232,10 @@ router.post('/log-expand', optionalAuth, async function(req, res) {
     }
 });
 
+// GET /api/session-tier — returns current tier + phone for modal polling
+router.get('/api/session-tier', optionalAuth, function(req, res) {
+    if (!req.user) return res.json({ tier: 0, phone: null });
+    res.json({ tier: req.user.tier || 0, phone: req.user.phone || null });
+});
+
 module.exports = router;
