@@ -72,7 +72,7 @@ function clusterSummary(cluster, tier, tzPref) {
     return needs.length + ' rider' + (needs.length > 1 ? 's' : '') + ' headed this way &mdash; no driver yet';
 }
 
-function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
+function personHtml(req, tier, userPhone, verifiedSet, tzPref, clusterFrom, clusterTo, clusterDate) {
     var isOffer = req.request_type === 'offer';
     var typeClass = isOffer ? 'offer' : 'need';
     var badge = isOffer ? '&#128663; Offering' : '&#9995; Looking';
@@ -99,10 +99,12 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
     }
 
     var yourPostBadge = '';
+    var isOwnPost = false;
     if (tier >= 2 && userPhone && req.source_contact) {
         var reqPhone = req.source_contact.replace(/\D/g, '');
         if (reqPhone && reqPhone === userPhone) {
             yourPostBadge = '<span class="pill pill-your-post">&#11088; Your post</span>';
+            isOwnPost = true;
         }
     }
 
@@ -117,7 +119,6 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
     if (tier >= 2 && req.source_contact) {
         var displayPhone = req.source_contact.replace(/\D/g, '');
         if (displayPhone) {
-            var isOwnPost = userPhone && displayPhone === userPhone;
             if (!isOwnPost) {
                 waBtn = '<a class="wa-contact-btn" href="https://wa.me/' + escHtml(displayPhone) + '" target="_blank" rel="noopener noreferrer" onclick="beaconJson(\'/log-click\',{phone:\'' + escHtml(displayPhone) + '\',page:\'clusters\',user_email:_userEmail})">' +
                     '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.852L0 24l6.335-1.507A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.807 9.807 0 01-5.032-1.384l-.361-.214-3.762.895.952-3.664-.235-.376A9.808 9.808 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182c5.43 0 9.818 4.388 9.818 9.818 0 5.43-4.388 9.818-9.818 9.818z"/></svg>' +
@@ -137,12 +138,17 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref) {
         msgHtml = '<div class="person-msg">&ldquo;' + msg + '&rdquo;</div>';
     }
 
+    var shareBtn = '';
+    if (isOwnPost && clusterFrom && clusterTo && clusterDate) {
+        shareBtn = '<button class="share-ride-btn" data-from="' + clusterFrom + '" data-to="' + clusterTo + '" data-date="' + clusterDate + '" onclick="event.stopPropagation();shareRideCard(this)">&#128279; Share</button>';
+    }
+
     var metaHtml = '';
     if (tier > 0) {
         var metaText = (group ? 'via ' + group : '') + (sent ? ' &middot; sent ' + sent : '');
         metaHtml = '<div class="person-footer">' +
             '<div class="person-meta">' + metaText + '</div>' +
-            waBtn +
+            (waBtn || shareBtn) +
             '</div>';
     } else {
         metaHtml = '<div class="person-meta">' + (sent ? 'sent ' + sent : '') + '</div>';
@@ -179,8 +185,8 @@ function clusterHtml(cluster, direction, tier, userPhone, verifiedSet, tzPref) {
 
     var personCards = '';
     // offers first, then needs
-    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone, verifiedSet, tzPref);
-    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone, verifiedSet, tzPref);
+    for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone, verifiedSet, tzPref, cluster.origin, cluster.destination, cluster.repDate);
+    for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone, verifiedSet, tzPref, cluster.origin, cluster.destination, cluster.repDate);
 
     var repDate = escHtml(cluster.repDate || '');
     return '<article class="cluster ' + direction + '" data-from="' + from + '" data-to="' + to + '" data-date="' + repDate + '" tabindex="0" role="button" aria-expanded="false">' +
@@ -644,6 +650,9 @@ var CSS = [
 '.wa-contact-btn svg { flex-shrink: 0; }',
 '.wa-contact-btn.wa-locked { background: transparent; color: var(--maroon); border: 1px dashed #c8a4a4; font-weight: 600; }',
 '.wa-contact-btn.wa-locked:hover { background: #fdf5f5; border-color: var(--maroon); }',
+'.share-ride-btn { display: inline-flex; align-items: center; gap: 4px; background: #f0f0f0; color: #333; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px; border: none; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: background 0.15s; font-family: inherit; }',
+'.share-ride-btn:hover { background: #e0e0e0; }',
+'.share-ride-btn.copied { background: #dcfce7; color: #166534; }',
 '.verified-tick { display: inline-flex; align-items: center; justify-content: center; margin-left: 3px; cursor: pointer; vertical-align: -2px; line-height: 0; }',
 '.verified-tick svg { display: block; }',
 '.verified-tick.verified-tick-legend { margin: 0 2px; cursor: default; }',
@@ -820,7 +829,9 @@ var JS = [
 'var _pmPollTimer=null;',
 'function pmStartPolling(){if(_pmPollTimer)return;_pmPollTimer=setInterval(async function(){try{var r=await fetch("/api/session-tier");var d=await r.json();if(d.tier>=2){clearInterval(_pmPollTimer);_pmPollTimer=null;pmUnlockForm(d.phone);}}catch(e){}},3000);}',
 'function pmUnlockForm(phone){_userTier=2;_userPhone=phone||"";var cta=document.getElementById("pm-verify-cta");var flash=document.getElementById("pm-verified-flash");var btn=document.getElementById("pm-submit");var nudge=document.getElementById("pm-phone-nudge");var pi=document.getElementById("pm-phone");if(cta)cta.style.display="none";if(flash)flash.style.display="block";if(btn){btn.disabled=false;btn.style.opacity="";btn.style.display="block";btn.title="";}if(pi&&phone){pi.value="+"+phone;pi.readOnly=true;pi.style.background="#f5f5f7";}if(nudge)nudge.style.display="none";}',
-'async function submitRide(e){e.preventDefault();var form=e.target;var btn=document.getElementById("pm-submit");var errEl=document.getElementById("pm-err");errEl.style.display="none";btn.disabled=true;btn.textContent="Posting...";var data={};var fd=new FormData(form);fd.forEach(function(v,k){data[k]=v;});if(data.origin==="Other")data.origin=data.originOther||"";if(data.destination==="Other")data.destination=data.destinationOther||"";delete data.originOther;delete data.destinationOther;try{var r=await fetch("/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var j=await r.json();if(!r.ok){errEl.textContent=j.error||"Something went wrong.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";return;}window.location.href="/profile?submitted=1&matches="+(j.matches||0);}catch(err){errEl.textContent="Network error. Please try again.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";}}'
+'async function submitRide(e){e.preventDefault();var form=e.target;var btn=document.getElementById("pm-submit");var errEl=document.getElementById("pm-err");errEl.style.display="none";btn.disabled=true;btn.textContent="Posting...";var data={};var fd=new FormData(form);fd.forEach(function(v,k){data[k]=v;});if(data.origin==="Other")data.origin=data.originOther||"";if(data.destination==="Other")data.destination=data.destinationOther||"";delete data.originOther;delete data.destinationOther;try{var r=await fetch("/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var j=await r.json();if(!r.ok){errEl.textContent=j.error||"Something went wrong.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";return;}window.location.href="/profile?submitted=1&matches="+(j.matches||0);}catch(err){errEl.textContent="Network error. Please try again.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";}}',
+'function shareRideCard(btn){var from=btn.getAttribute("data-from");var to=btn.getAttribute("data-to");var date=btn.getAttribute("data-date");var d=new Date(date+"T12:00:00");var dateStr=d.toLocaleDateString("en-US",{month:"short",day:"numeric"});var url="https://ridesplit.app/?from="+encodeURIComponent(from)+"&to="+encodeURIComponent(to)+"&date="+encodeURIComponent(date);var text=from+" → "+to+" · "+dateStr;var full=text+"\n"+url;if(navigator.share){navigator.share({title:text,url:url}).catch(function(){});}else{navigator.clipboard.writeText(full).then(function(){btn.textContent="Copied!";btn.classList.add("copied");setTimeout(function(){btn.innerHTML="🔗 Share";btn.classList.remove("copied");},2000);}).catch(function(){});}}',
+'(function(){var p=new URLSearchParams(window.location.search);var from=p.get("from"),to=p.get("to"),date=p.get("date");if(!from||!to||!date)return;var clean=new URL(window.location.href);clean.searchParams.delete("from");clean.searchParams.delete("to");clean.searchParams.delete("date");history.replaceState(null,"",clean.toString());var clusters=document.querySelectorAll(".cluster");for(var i=0;i<clusters.length;i++){var c=clusters[i];if(c.getAttribute("data-from")===from&&c.getAttribute("data-to")===to&&c.getAttribute("data-date")===date){if(!c.classList.contains("open"))toggleCluster(c);var target=c;setTimeout(function(){target.scrollIntoView({behavior:"smooth",block:"start"});},200);break;}}})();'
 ].join('\n');
 
 module.exports = router;
