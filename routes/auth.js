@@ -24,11 +24,16 @@ router.get('/login', function(req, res) {
 router.post('/login', async function(req, res) {
     var email = (req.body.email || '').trim().toLowerCase();
 
-    if (!email || !email.endsWith('@tamu.edu')) {
-        return res.send(renderLoginPage('Please use your @tamu.edu email address.', email));
-    }
-    if (!/^[^\s@]+@tamu\.edu$/.test(email)) {
-        return res.send(renderLoginPage('Please enter a valid @tamu.edu email.', email));
+    var isDev = process.env.NODE_ENV !== 'production';
+    if (!isDev) {
+        if (!email || !email.endsWith('@tamu.edu')) {
+            return res.send(renderLoginPage('Please use your @tamu.edu email address.', email));
+        }
+        if (!/^[^\s@]+@tamu\.edu$/.test(email)) {
+            return res.send(renderLoginPage('Please enter a valid @tamu.edu email.', email));
+        }
+    } else if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.send(renderLoginPage('Please enter a valid email address.', email));
     }
 
     try {
