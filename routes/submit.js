@@ -14,6 +14,9 @@ router.post('/submit', submitLimiter, optionalAuth, async function(req, res) {
     if (!req.user) {
         return res.status(401).json({ error: 'You must be signed in to submit a ride.' });
     }
+    if (req.user.tier < 2) {
+        return res.status(403).json({ error: 'Verify your WhatsApp number first to post a ride.', needsVerify: true });
+    }
 
     var type = (req.body.type || '').trim();
     var origin = (req.body.origin || '').trim();
