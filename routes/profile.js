@@ -26,7 +26,7 @@ router.get('/profile', optionalAuth, async function(req, res) {
 
     var listings = await fetchUserListings({ phones: phones });
 
-    res.send(renderProfilePage(req.user, profile, { phones: phones, email: email, listings: listings }));
+    res.send(renderProfilePage(req.user, profile, { phones: phones, email: email, listings: listings, submitted: req.query.submitted === '1', matchCount: parseInt(req.query.matches, 10) || 0 }));
 });
 
 router.post('/profile/name', nameLimiter, optionalAuth, async function(req, res) {

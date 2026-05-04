@@ -224,10 +224,16 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
                 .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
                 .order('created_at', { ascending: false }),
             readClient.from('monitored_groups').select('group_id, group_name, is_test').eq('active', true),
-            readClient.from('user_profiles').select('phone')
+            readClient.from('user_profiles').select('phone'),
+            userPhone
+                ? readClient.from('user_profiles').select('display_name, wa_name').eq('phone', userPhone).maybeSingle()
+                : Promise.resolve({ data: null })
         ]);
 
         var verifiedSet = new Set((results[2].data || []).map(function(r) { return (r.phone || '').replace(/\D/g, ''); }).filter(Boolean));
+        var profileData = results[3] ? results[3].data : null;
+        var userDisplayName = (profileData && (profileData.display_name || profileData.wa_name))
+            || (userEmail ? userEmail.split('@')[0] : '');
 
         // Demo mode: ?demo=1 marks every poster verified for preview
         var demoMode = req.query.demo === '1';
@@ -375,7 +381,7 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
             '</strong> across <strong>' + activeGroupCount + ' WhatsApp group' + (activeGroupCount !== 1 ? 's' : '') +
             '</strong> this week';
 
-        res.send(PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, activeGroupCount, tier, userEmail, userPhone, tzPref));
+        res.send(PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, activeGroupCount, tier, userEmail, userPhone, tzPref, userDisplayName));
     } catch (err) {
         console.error('[Clusters] Error:', err);
         res.status(500).send('Internal error');
@@ -398,7 +404,7 @@ function tzFooterHtml(tzPref) {
     return '<div class="tz-footnote">Post times in ' + label + '. Ride times always in origin-city local.</div>';
 }
 
-function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, groupCount, tier, userEmail, userPhone, tzPref) {
+function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, groupCount, tier, userEmail, userPhone, tzPref, userDisplayName) {
     var authHtml;
     if (tier === 0) {
         authHtml = '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see contact details</div>';
@@ -479,7 +485,31 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
 
         tzFooterHtml(tzPref) +
         '<div class="footer">' + totalCount + ' total requests &middot; ' + groupCount + ' groups monitored &middot; <a href="/faq">FAQ</a> &middot; <a href="/terms">Terms</a> &middot; v3.8</div>\n' +
-        '</div>\n<script>var _userEmail=' + JSON.stringify(userEmail||'') + ';var _userPhone=' + JSON.stringify(userPhone||'') + ';</script>\n<script>\n' + JS + '\n</script>\n</body>\n</html>';
+        '</div>\n' +
+        // Post-ride FAB
+        '<button class="post-ride-fab" onclick="openPostModal()" aria-label="Post a ride">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+        'Post a Ride</button>\n' +
+        // Post-ride modal
+        '<div class="pm-overlay" id="pmOverlay" onclick="if(event.target===this)closePostModal()">' +
+        '<div class="pm-card">' +
+        '<div class="pm-hdr"><span class="pm-title">Post a Ride</span><button type="button" class="pm-close" onclick="closePostModal()" aria-label="Close">&times;</button></div>' +
+        '<div id="pm-anon" style="display:none;padding:28px 20px;text-align:center;"><p style="font-size:15px;color:#444;margin-bottom:20px;line-height:1.5;">Sign in with your @tamu.edu email to post a ride and get matched with other Aggies.</p><a href="/login" style="display:block;text-align:center;text-decoration:none;padding:13px;border-radius:10px;border:none;background:#500000;color:#fff;font-size:15px;font-weight:700;">Sign in to post &rarr;</a></div>' +
+        '<form id="pm-form" onsubmit="submitRide(event)" style="display:none;padding:16px 20px 20px;">' +
+        '<div class="pm-field"><div class="pm-label">I am...</div><div class="pm-radios"><label class="pm-radio"><input type="radio" name="type" value="need" required> Looking for a ride</label><label class="pm-radio"><input type="radio" name="type" value="offer"> Offering a ride</label></div></div>' +
+        '<div class="pm-row">' +
+        '<div class="pm-field"><div class="pm-label">From</div><select name="origin" required onchange="pmHandleOther(\'origin\',this.value)"><option value="">City...</option><option>College Station</option><option>Bryan</option><option>Houston</option><option>Dallas</option><option>Fort Worth</option><option>Austin</option><option value="Other">Other...</option></select><input type="text" name="originOther" placeholder="City name" class="pm-other" style="display:none"></div>' +
+        '<div class="pm-field"><div class="pm-label">To</div><select name="destination" required onchange="pmHandleOther(\'destination\',this.value)"><option value="">City...</option><option>College Station</option><option>Bryan</option><option>Houston</option><option>Dallas</option><option>Fort Worth</option><option>Austin</option><option value="Other">Other...</option></select><input type="text" name="destinationOther" placeholder="City name" class="pm-other" style="display:none"></div>' +
+        '</div>' +
+        '<div class="pm-row"><div class="pm-field"><div class="pm-label">Date</div><input type="date" name="date" id="pm-date" required></div><div class="pm-field"><div class="pm-label">Time <span class="pm-opt">optional</span></div><input type="time" name="time"></div></div>' +
+        '<div class="pm-field"><div class="pm-label">Description</div><textarea name="comments" required placeholder="e.g. Need 1 seat. Flexible on timing. Happy to split gas." rows="3"></textarea></div>' +
+        '<div class="pm-field"><div class="pm-label">Your name</div><input type="text" name="name" id="pm-name" required maxlength="60" placeholder="Your name"></div>' +
+        '<div class="pm-field"><div class="pm-label">WhatsApp number</div><div id="pm-phone-nudge" class="pm-nudge" style="display:none"><a href="/verify/wa?returnTo=/">Verify your WhatsApp</a> to auto-fill your number, or enter it below:</div><input type="text" name="phone" id="pm-phone" placeholder="+1 (979) 000-0000"></div>' +
+        '<div id="pm-err" class="pm-err" style="display:none"></div>' +
+        '<button type="submit" class="pm-btn-primary" id="pm-submit">Post Ride</button>' +
+        '</form>' +
+        '</div></div>\n' +
+        '<script>var _userEmail=' + JSON.stringify(userEmail||'') + ';var _userPhone=' + JSON.stringify(userPhone||'') + ';var _userTier=' + JSON.stringify(tier) + ';var _userName=' + JSON.stringify(userDisplayName||'') + ';</script>\n<script>\n' + JS + '\n</script>\n</body>\n</html>';
 }
 
 // ── CSS (from mockup) ───────────────────────────────────────────────────
@@ -664,7 +694,39 @@ var CSS = [
 '  .person-name { font-size: 13px; }',
 '  .person-msg { font-size: 12px; }',
 '  .person-sent { display: none; }',
-'}'
+'}',
+/* Post-ride FAB */
+'.post-ride-fab { position: fixed; bottom: 24px; right: 20px; z-index: 50; display: inline-flex; align-items: center; gap: 8px; background: var(--maroon); color: #fff; border: none; border-radius: 99px; padding: 12px 20px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(80,0,0,0.35); transition: background 0.15s, box-shadow 0.15s, transform 0.1s; font-family: inherit; -webkit-tap-highlight-color: transparent; white-space: nowrap; }',
+'.post-ride-fab:hover { background: var(--maroon-light); box-shadow: 0 6px 24px rgba(80,0,0,0.4); }',
+'.post-ride-fab:active { transform: scale(0.97); }',
+/* Modal overlay */
+'.pm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 500; align-items: center; justify-content: center; padding: 20px; }',
+'.pm-overlay.open { display: flex; }',
+'.pm-card { background: #fff; border-radius: 16px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }',
+'.pm-hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e5e5e5; position: sticky; top: 0; background: #fff; z-index: 1; }',
+'.pm-title { font-size: 17px; font-weight: 700; color: #1a1a1a; }',
+'.pm-close { background: none; border: none; font-size: 26px; cursor: pointer; color: #999; line-height: 1; padding: 0 2px; }',
+'.pm-close:hover { color: #333; }',
+'.pm-field { margin-bottom: 14px; }',
+'.pm-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8e8e93; margin-bottom: 6px; }',
+'.pm-opt { font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; color: #b0b0b0; }',
+'.pm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }',
+'.pm-radios { display: flex; gap: 16px; flex-wrap: wrap; }',
+'.pm-radio { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }',
+'.pm-radio input { accent-color: var(--maroon); }',
+'.pm-field select, .pm-field input[type="text"], .pm-field input[type="date"], .pm-field input[type="time"], .pm-field textarea { width: 100%; padding: 10px 12px; border: 1.5px solid #e5e5ea; border-radius: 10px; font-size: 14px; font-family: inherit; color: #1a1a1a; background: #fff; outline: none; transition: border-color 0.15s; box-sizing: border-box; }',
+'.pm-field select:focus, .pm-field input:focus, .pm-field textarea:focus { border-color: var(--maroon); }',
+'.pm-field textarea { resize: vertical; min-height: 80px; }',
+'.pm-field input[readonly] { background: #f5f5f7; color: #666; cursor: default; }',
+'.pm-other { margin-top: 8px !important; }',
+'.pm-nudge { font-size: 12px; color: #555; margin-bottom: 8px; line-height: 1.45; }',
+'.pm-nudge a { color: var(--maroon); font-weight: 600; text-decoration: none; }',
+'.pm-nudge a:hover { text-decoration: underline; }',
+'.pm-err { font-size: 13px; color: #c00; margin-bottom: 12px; padding: 10px 12px; background: #fff5f5; border-radius: 8px; border: 1px solid #fecaca; }',
+'.pm-btn-primary { display: block; width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--maroon); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.15s; }',
+'.pm-btn-primary:hover { background: var(--maroon-light); }',
+'.pm-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }',
+'@media (max-width: 520px) { .post-ride-fab { bottom: 84px; right: 16px; padding: 11px 18px; font-size: 13px; } .pm-row { grid-template-columns: 1fr; gap: 0; } .pm-overlay { padding: 0; align-items: flex-end; } .pm-card { border-radius: 16px 16px 0 0; max-height: 92vh; } }'
 ].join('\n');
 
 // ── JS (from mockup) ───────────────────────────────────────────────────
@@ -741,7 +803,14 @@ var JS = [
 'function tickNowClock(){var el=document.getElementById("nowPill");if(!el)return;var pref=el.getAttribute("data-tz")||"CT";var iana=TZ_MAP[pref]||TZ_MAP.CT;var f=document.getElementById("nowTextFull");if(f)f.textContent=fmtNow(iana,true);var s=document.getElementById("nowTextShort");if(s)s.textContent=fmtNow(iana,false);var items=document.querySelectorAll("[data-tz-time]");for(var i=0;i<items.length;i++){var z=items[i].getAttribute("data-tz-time");items[i].textContent=fmtNow(TZ_MAP[z]||TZ_MAP.CT,false);}}',
 'tickNowClock();',
 'setInterval(tickNowClock,30000);',
-'(function(){var btn=document.getElementById("nowPill");var menu=document.getElementById("nowMenu");if(!btn||!menu)return;var cur=btn.getAttribute("data-tz")||"CT";var items=menu.querySelectorAll(".now-menu-item");for(var i=0;i<items.length;i++){if(items[i].getAttribute("data-tz")===cur)items[i].classList.add("selected");}function close(){menu.classList.remove("open");btn.setAttribute("aria-expanded","false");}function open(){menu.classList.add("open");btn.setAttribute("aria-expanded","true");}btn.addEventListener("click",function(e){e.stopPropagation();menu.classList.contains("open")?close():open();});items.forEach(function(it){it.addEventListener("click",function(){var z=it.getAttribute("data-tz");var u=new URL(window.location.href);u.searchParams.set("tz",z);window.location.href=u.toString();});});document.addEventListener("click",function(e){if(!menu.contains(e.target)&&e.target!==btn)close();});document.addEventListener("keydown",function(e){if(e.key==="Escape")close();});})();'
+'(function(){var btn=document.getElementById("nowPill");var menu=document.getElementById("nowMenu");if(!btn||!menu)return;var cur=btn.getAttribute("data-tz")||"CT";var items=menu.querySelectorAll(".now-menu-item");for(var i=0;i<items.length;i++){if(items[i].getAttribute("data-tz")===cur)items[i].classList.add("selected");}function close(){menu.classList.remove("open");btn.setAttribute("aria-expanded","false");}function open(){menu.classList.add("open");btn.setAttribute("aria-expanded","true");}btn.addEventListener("click",function(e){e.stopPropagation();menu.classList.contains("open")?close():open();});items.forEach(function(it){it.addEventListener("click",function(){var z=it.getAttribute("data-tz");var u=new URL(window.location.href);u.searchParams.set("tz",z);window.location.href=u.toString();});});document.addEventListener("click",function(e){if(!menu.contains(e.target)&&e.target!==btn)close();});document.addEventListener("keydown",function(e){if(e.key==="Escape")close();});})();',
+/* Post-ride modal JS */
+'var _pmInited=false;',
+'function openPostModal(){var o=document.getElementById("pmOverlay");if(!o)return;o.classList.add("open");document.body.style.overflow="hidden";if(!_pmInited){_pmInited=true;var anon=document.getElementById("pm-anon");var form=document.getElementById("pm-form");if(_userTier===0){anon.style.display="block";form.style.display="none";}else{anon.style.display="none";form.style.display="block";var ni=document.getElementById("pm-name");if(ni&&_userName&&!ni.value)ni.value=_userName;var pi=document.getElementById("pm-phone");if(pi){if(_userTier>=2&&_userPhone){pi.value="+"+_userPhone;pi.readOnly=true;pi.style.background="#f5f5f7";}else{var nudge=document.getElementById("pm-phone-nudge");if(nudge)nudge.style.display="block";}}var di=document.getElementById("pm-date");if(di)di.min=new Date().toISOString().split("T")[0];}}}',
+'function closePostModal(){var o=document.getElementById("pmOverlay");if(o)o.classList.remove("open");document.body.style.overflow="";}',
+'document.addEventListener("keydown",function(e){if(e.key==="Escape"){var o=document.getElementById("pmOverlay");if(o&&o.classList.contains("open"))closePostModal();}});',
+'function pmHandleOther(field,val){var inp=document.querySelector("[name=\'"+field+"Other\']");if(!inp)return;if(val==="Other"){inp.style.display="block";inp.required=true;inp.focus();}else{inp.style.display="none";inp.required=false;inp.value="";}}',
+'async function submitRide(e){e.preventDefault();var form=e.target;var btn=document.getElementById("pm-submit");var errEl=document.getElementById("pm-err");errEl.style.display="none";btn.disabled=true;btn.textContent="Posting...";var data={};var fd=new FormData(form);fd.forEach(function(v,k){data[k]=v;});if(data.origin==="Other")data.origin=data.originOther||"";if(data.destination==="Other")data.destination=data.destinationOther||"";delete data.originOther;delete data.destinationOther;try{var r=await fetch("/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var j=await r.json();if(!r.ok){errEl.textContent=j.error||"Something went wrong.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";return;}window.location.href="/profile?submitted=1&matches="+(j.matches||0);}catch(err){errEl.textContent="Network error. Please try again.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";}}'
 ].join('\n');
 
 module.exports = router;

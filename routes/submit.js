@@ -37,6 +37,7 @@ router.post('/submit', submitLimiter, optionalAuth, async function(req, res) {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { errors.push('Valid date is required.'); errorFields.push('date'); }
     if (!name) { errors.push('Name is required.'); errorFields.push('name'); }
     if (!phone || !/^\+?[\d\s\-()]{7,}$/.test(phone)) { errors.push('Valid phone number is required.'); errorFields.push('phone'); }
+    if (!comments) { errors.push('Description is required.'); errorFields.push('comments'); }
     if (origin && destination && normalizeLocation(origin) === normalizeLocation(destination)) {
         errors.push('Origin and destination cannot be the same.');
         errorFields.push('origin', 'destination');
