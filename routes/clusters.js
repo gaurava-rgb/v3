@@ -504,7 +504,7 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '<div class="pm-row"><div class="pm-field"><div class="pm-label">Date</div><input type="date" name="date" id="pm-date" required></div><div class="pm-field"><div class="pm-label">Time <span class="pm-opt">optional</span></div><input type="time" name="time"></div></div>' +
         '<div class="pm-field"><div class="pm-label">Description</div><textarea name="comments" required placeholder="e.g. Need 1 seat. Flexible on timing. Happy to split gas." rows="3"></textarea></div>' +
         '<div class="pm-field"><div class="pm-label">Your name</div><input type="text" name="name" id="pm-name" required maxlength="60" placeholder="Your name"></div>' +
-        '<div class="pm-field"><div class="pm-label">WhatsApp number</div><div id="pm-phone-nudge" class="pm-nudge" style="display:none">Your number will be shared with matches. Verify below to post.</div><input type="text" name="phone" id="pm-phone" placeholder="+1 (979) 000-0000"></div>' +
+        '<div class="pm-field"><div class="pm-label">WhatsApp number</div><div id="pm-phone-nudge" class="pm-nudge" style="display:none">Your number will be shared with matches. Verify below to post.</div><input type="text" name="phone" id="pm-phone" placeholder="e.g. 19791234567 or 919953477576" inputmode="numeric"><div class="pm-phone-hint">No + needed &mdash; include country code &nbsp;&#183;&nbsp; US: <code>1...</code> &nbsp;&#183;&nbsp; India: <code>91...</code></div></div>' +
         '<div id="pm-err" class="pm-err" style="display:none"></div>' +
         '<div id="pm-verify-cta" style="display:none;">' +
           '<div style="font-size:12px;color:#888;text-align:center;margin-bottom:8px;" id="pm-poll-status">Waiting for verification&hellip;</div>' +
@@ -728,6 +728,8 @@ var CSS = [
 '.pm-nudge a { color: var(--maroon); font-weight: 600; text-decoration: none; }',
 '.pm-nudge a:hover { text-decoration: underline; }',
 '.pm-err { font-size: 13px; color: #c00; margin-bottom: 12px; padding: 10px 12px; background: #fff5f5; border-radius: 8px; border: 1px solid #fecaca; }',
+'.pm-phone-hint { font-size: 11px; color: #aaa; margin-top: 5px; line-height: 1.4; }',
+'.pm-phone-hint code { font-family: monospace; color: #888; }',
 '.pm-btn-primary { display: block; width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--maroon); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.15s; }',
 '.pm-btn-primary:hover { background: var(--maroon-light); }',
 '.pm-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }',
