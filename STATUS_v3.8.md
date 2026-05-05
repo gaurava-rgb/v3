@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.15 | **Date:** May 5, 2026 | **App version:** 3.8.0
+**Version:** 1.16 | **Date:** May 5, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -354,6 +354,16 @@ Three session types, all coexist:
 - `652f6d4` — phone field UX (no + needed, country code hint)
 - `7eb7cef` — profile rides fix (writeClient + drop status column)
 - `024980d` — cluster dedup (one row per contact per cluster)
+
+---
+
+## May 5, 2026 — Modify page polish — DEPLOYED `b80091b`
+
+### Changes
+- Renamed "Edit" → "Modify" on homepage clusters + profile ride cards
+- Added "Delete this ride" to the `/ride/:id/edit` page (red text link, confirm dialog, bottom of form)
+- Cancel button already present (returns to `returnTo`)
+- Delete on profile cards still works independently
 
 ---
 
