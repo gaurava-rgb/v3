@@ -6,6 +6,7 @@
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeLocation } = require('./normalize');
+const { writeClient } = require('./lib/supabase');
 
 const supabase = createClient(
     process.env.SUPABASE_URL,
@@ -233,6 +234,7 @@ async function saveRequest(data) {
         const normOrigin = normalizeLocation(data.origin);
         const normDest = normalizeLocation(data.destination);
         const inserted = [];
+        let parentId = null;
         for (const d of possible) {
             const h = computeRequestHash({
                 sourceContact: data.sourceContact,
@@ -266,6 +268,7 @@ async function saveRequest(data) {
                     raw_message: data.rawMessage,
                     tags: baseTags,
                     request_status: 'open',
+                    parent_id: parentId,
                     request_hash: h
                 })
                 .select()
@@ -275,6 +278,7 @@ async function saveRequest(data) {
                 continue;
             }
             inserted.push(row);
+            if (inserted.length === 1) parentId = row.id;
         }
         if (inserted.length) {
             console.log(`[DB] Fan-out inserted ${inserted.length} flexible rows (${data.type} ${data.category} → ${data.destination})`);
@@ -486,6 +490,176 @@ async function getStats() {
     };
 }
 
+// ============================================================
+// Edit / Delete (dashboard mutations)
+// ============================================================
+
+/**
+ * Find all sibling rows for a fan-out request (same parent_id group)
+ * or fall back to raw_message + date_fuzzy heuristic for legacy rows.
+ */
+async function findSiblingIds(requestId) {
+    const { data: row, error } = await writeClient
+        .from('v3_requests')
+        .select('id, parent_id, source_contact, raw_message, date_fuzzy')
+        .eq('id', requestId)
+        .single();
+    if (error || !row) return [requestId];
+
+    // If this row has a parent_id, find all rows with same parent_id OR is the parent
+    if (row.parent_id) {
+        const { data: siblings } = await writeClient
+            .from('v3_requests')
+            .select('id')
+            .or('id.eq.' + row.parent_id + ',parent_id.eq.' + row.parent_id);
+        return (siblings || []).map(s => s.id);
+    }
+
+    // This row might itself be the parent — check if any rows point to it
+    const { data: children } = await writeClient
+        .from('v3_requests')
+        .select('id')
+        .eq('parent_id', requestId);
+    if (children && children.length > 0) {
+        return [requestId, ...children.map(c => c.id)];
+    }
+
+    // Legacy: no parent_id — find by source_contact + raw_message + date_fuzzy
+    if (row.date_fuzzy && row.raw_message) {
+        const { data: siblings } = await writeClient
+            .from('v3_requests')
+            .select('id')
+            .eq('source_contact', row.source_contact)
+            .eq('raw_message', row.raw_message)
+            .eq('date_fuzzy', true);
+        return (siblings || []).map(s => s.id);
+    }
+
+    return [requestId];
+}
+
+/**
+ * Update a request (and all fan-out siblings) with new field values.
+ * Recomputes the dedup hash for each sibling, logs the changelog,
+ * invalidates stale matches, and re-runs the matcher.
+ *
+ * @param {string} requestId  - UUID of the row being edited
+ * @param {object} fields     - { request_origin, request_destination, ride_plan_date,
+ *                               ride_plan_time, request_type, raw_message, reason }
+ * @param {string} editorPhone - phone of the user making the edit
+ */
+async function updateRequest(requestId, fields, editorPhone) {
+    const { reason, ...coreFields } = fields;
+
+    // Fetch current row for snapshot + hash recompute
+    const { data: current, error: fetchErr } = await writeClient
+        .from('v3_requests')
+        .select('*')
+        .eq('id', requestId)
+        .single();
+    if (fetchErr || !current) throw new Error('Ride not found');
+
+    const siblingIds = await findSiblingIds(requestId);
+
+    for (const sid of siblingIds) {
+        const { data: sib } = await writeClient
+            .from('v3_requests')
+            .select('id, source_contact, request_type, request_category, request_destination, ride_plan_date')
+            .eq('id', sid)
+            .single();
+        if (!sib) continue;
+
+        const newHash = computeRequestHash({
+            sourceContact: sib.source_contact,
+            type: fields.request_type || sib.request_type,
+            category: sib.request_category,
+            destination: fields.request_destination || sib.request_destination,
+            date: fields.ride_plan_date || sib.ride_plan_date
+        });
+
+        const updatePayload = Object.assign({}, coreFields, { request_hash: newHash });
+        // Each sibling keeps its own date — only overwrite date on the directly edited row
+        if (sid !== requestId) {
+            delete updatePayload.ride_plan_date;
+        }
+
+        await writeClient.from('v3_requests').update(updatePayload).eq('id', sid);
+    }
+
+    // Log changelog
+    const changedFields = {};
+    const prevValues = {};
+    for (const key of Object.keys(coreFields)) {
+        if (coreFields[key] !== current[key]) {
+            changedFields[key] = coreFields[key];
+            prevValues[key] = current[key];
+        }
+    }
+    await writeClient.from('v3_request_edits').insert({
+        request_id: requestId,
+        editor_phone: editorPhone,
+        action: 'edit',
+        reason: reason || null,
+        field_changes: changedFields,
+        previous_values: current
+    });
+
+    // Invalidate stale matches
+    await writeClient.from('v3_matches')
+        .delete()
+        .or('need_id.in.(' + siblingIds.join(',') + '),offer_id.in.(' + siblingIds.join(',') + ')');
+
+    // Re-run matcher for each sibling — fetch updated row then find matches
+    for (const sid of siblingIds) {
+        const { data: updatedRow } = await writeClient
+            .from('v3_requests')
+            .select('*')
+            .eq('id', sid)
+            .single();
+        if (!updatedRow) continue;
+
+        const potentialMatches = await findMatches(updatedRow);
+        for (const matchRow of potentialMatches) {
+            const isNeed = updatedRow.request_type === 'need';
+            const needId  = isNeed ? sid : matchRow.id;
+            const offerId = isNeed ? matchRow.id : sid;
+            await saveMatch(needId, offerId);
+        }
+    }
+}
+
+/**
+ * Soft-delete a request (and all fan-out siblings).
+ * Invalidates stale matches and logs the changelog.
+ *
+ * @param {string} requestId  - UUID of the row being deleted
+ * @param {string} editorPhone - phone of the user making the deletion
+ */
+async function deleteRequest(requestId, editorPhone) {
+    const { data: current } = await writeClient
+        .from('v3_requests').select('*').eq('id', requestId).single();
+    if (!current) throw new Error('Ride not found');
+
+    const siblingIds = await findSiblingIds(requestId);
+
+    await writeClient.from('v3_requests')
+        .update({ request_status: 'deleted' })
+        .in('id', siblingIds);
+
+    await writeClient.from('v3_matches')
+        .delete()
+        .or('need_id.in.(' + siblingIds.join(',') + '),offer_id.in.(' + siblingIds.join(',') + ')');
+
+    await writeClient.from('v3_request_edits').insert({
+        request_id: requestId,
+        editor_phone: editorPhone,
+        action: 'delete',
+        reason: null,
+        field_changes: null,
+        previous_values: current
+    });
+}
+
 module.exports = {
     supabase,
     loadMonitoredGroups,
@@ -500,5 +674,8 @@ module.exports = {
     saveRequest,
     findMatches,
     saveMatch,
-    getStats
+    getStats,
+    findSiblingIds,
+    updateRequest,
+    deleteRequest
 };
