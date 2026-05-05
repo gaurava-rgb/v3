@@ -54,6 +54,7 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - `STATUS_v3.8.md` is the canonical project status doc — **read it at the start of every new chat**
 - After completing any sprint or significant change, update `STATUS_v3.8.md`: move items from Open→Completed, add new open items, bump version header
 - When a new sprint finishes, rename the file to match the new version (e.g. `STATUS_v3.9.md`) and update this line
+- **After every deploy:** update STATUS file (bump version + date, add sprint section), update MEMORY.md, commit both
 
 ## Rules
 - Do NOT modify bot.js unless explicitly asked — it's connected to live WhatsApp

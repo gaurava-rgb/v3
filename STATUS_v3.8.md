@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.14 | **Date:** May 4, 2026 | **App version:** 3.8.0
+**Version:** 1.15 | **Date:** May 5, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -354,6 +354,49 @@ Three session types, all coexist:
 - `652f6d4` — phone field UX (no + needed, country code hint)
 - `7eb7cef` — profile rides fix (writeClient + drop status column)
 - `024980d` — cluster dedup (one row per contact per cluster)
+
+---
+
+## Sprint 21 — May 5, 2026 (Ride Edit + Delete) — DEPLOYED `ec9a223`
+
+### Built
+- **T2 users can edit own ride cards** — Edit link on profile + homepage clusters own-post cards
+- **T2 users can delete own ride cards** — Delete button (confirm guard) on profile cards; soft-delete (`request_status='deleted'`)
+- **Edit form** — `/ride/:id/edit` server-rendered page; fields: origin, destination, date, time, type (need/offer), raw_message, reason for edit
+- **Changelog** — every edit/delete logs to `v3_request_edits` (full row snapshot in `previous_values`, field diff in `field_changes`, editor_phone, reason)
+- **Fan-out sibling propagation** — edit updates all sibling rows; each sibling keeps its own `ride_plan_date`; hash recomputed correctly per sibling
+- **Re-matching** — after edit: stale `v3_matches` deleted, matcher re-runs for all siblings
+- **Open-redirect fix** — `returnTo` uses `startsWith('/') && !startsWith('//')` guard (blocks `//evil.com` protocol-relative URLs)
+
+### Schema changes (applied to Supabase before deploy)
+```sql
+ALTER TABLE v3_requests ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES v3_requests(id);
+CREATE TABLE IF NOT EXISTS v3_request_edits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id UUID NOT NULL REFERENCES v3_requests(id),
+  edited_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  editor_phone TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('edit', 'delete')),
+  reason TEXT,
+  field_changes JSONB,
+  previous_values JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_v3_request_edits_request_id ON v3_request_edits (request_id);
+```
+
+### Files touched
+- `db.js` — `findSiblingIds`, `updateRequest`, `deleteRequest`; fan-out now sets `parent_id` on sibling rows
+- `routes/rides.js` (new) — GET/POST `/ride/:id/edit`, POST `/ride/:id/delete`
+- `dashboard.js` — mounts `routes/rides`
+- `lib/views.js` — `renderRideCard(r, opts)` — `opts.isOwn` adds Edit link + Delete form
+- `routes/profile.js` — passes `isOwn: true, returnTo: '/profile'` to ride card renders
+- `routes/clusters.js` — edit link on own-post cards (inline styles, no class dependency)
+
+### Rollback
+```bash
+git checkout pre-ride-edit-delete && pm2 restart ecosystem.config.js
+```
+Tag: `pre-ride-edit-delete` (commit `0cbf135`)
 
 ---
 
