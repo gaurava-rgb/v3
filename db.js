@@ -569,12 +569,15 @@ async function updateRequest(requestId, fields, editorPhone) {
             .single();
         if (!sib) continue;
 
+        const dateForHash = (sid === requestId)
+            ? (fields.ride_plan_date || sib.ride_plan_date)
+            : sib.ride_plan_date;
         const newHash = computeRequestHash({
             sourceContact: sib.source_contact,
             type: fields.request_type || sib.request_type,
             category: sib.request_category,
             destination: fields.request_destination || sib.request_destination,
-            date: fields.ride_plan_date || sib.ride_plan_date
+            date: dateForHash
         });
 
         const updatePayload = Object.assign({}, coreFields, { request_hash: newHash });
