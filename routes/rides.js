@@ -72,7 +72,12 @@ router.get('/ride/:id/edit', optionalAuth, async function(req, res) {
         '<div class="btn-row">',
         '<button class="btn-save" type="submit">Save</button>',
         '<a class="btn-cancel" href="' + escHtml(returnTo) + '">Cancel</a>',
-        '</div></form></body></html>'
+        '</div></form>',
+        '<form method="POST" action="/ride/' + escHtml(ride.id) + '/delete" style="margin-top:32px;padding-top:20px;border-top:1px solid #f2f2f7;" onsubmit="return confirm(\'Delete this ride? This cannot be undone.\');">',
+        '<input type="hidden" name="returnTo" value="' + escHtml(returnTo) + '">',
+        '<button type="submit" style="background:none;border:none;color:#ff3b30;font-size:14px;cursor:pointer;padding:0;">Delete this ride</button>',
+        '</form>',
+        '</body></html>'
     ].join('\n'));
 });
 
