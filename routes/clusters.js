@@ -153,7 +153,7 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref, clusterFrom, clus
         var metaText = (group ? 'via ' + group : '') + (sent ? ' &middot; sent ' + sent : '');
         metaHtml = '<div class="person-footer">' +
             '<div class="person-meta">' + metaText + '</div>' +
-            (waBtn || shareBtn || '') + (editBtn ? ' ' + editBtn : '') +
+            '<div style="display:flex;gap:8px;align-items:center;">' + (waBtn || shareBtn || '') + (editBtn || '') + '</div>' +
             '</div>';
     } else {
         metaHtml = '<div class="person-meta">' + (sent ? 'sent ' + sent : '') + '</div>';
