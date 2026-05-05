@@ -143,12 +143,17 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref, clusterFrom, clus
         shareBtn = '<button class="share-ride-btn" data-from="' + clusterFrom + '" data-to="' + clusterTo + '" data-date="' + clusterDate + '" onclick="event.stopPropagation();shareRideCard(this)">&#128279; Share</button>';
     }
 
+    var editBtn = '';
+    if (isOwnPost && req.id) {
+        editBtn = '<a class="rc-edit-btn" href="/ride/' + escHtml(req.id) + '/edit?returnTo=' + encodeURIComponent('/') + '" onclick="event.stopPropagation()" style="font-size:12px;color:#500000;text-decoration:none;background:#f2f2f7;border:1px solid #e5e5ea;padding:4px 10px;border-radius:8px;font-weight:600;">Edit</a>';
+    }
+
     var metaHtml = '';
     if (tier > 0) {
         var metaText = (group ? 'via ' + group : '') + (sent ? ' &middot; sent ' + sent : '');
         metaHtml = '<div class="person-footer">' +
             '<div class="person-meta">' + metaText + '</div>' +
-            (waBtn || shareBtn) +
+            (waBtn || shareBtn || '') + (editBtn ? ' ' + editBtn : '') +
             '</div>';
     } else {
         metaHtml = '<div class="person-meta">' + (sent ? 'sent ' + sent : '') + '</div>';
