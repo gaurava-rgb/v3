@@ -32,7 +32,8 @@ async function ownedRide(req, res) {
 router.get('/ride/:id/edit', optionalAuth, async function(req, res) {
     var ride = await ownedRide(req, res);
     if (!ride) return;
-    var returnTo = req.query.returnTo || '/profile';
+    var rawReturn = req.query.returnTo || '/profile';
+    var returnTo = (rawReturn.startsWith('/') && !rawReturn.startsWith('//')) ? rawReturn : '/profile';
 
     res.send([
         '<!DOCTYPE html><html><head><meta charset="utf-8">',
@@ -79,7 +80,8 @@ router.get('/ride/:id/edit', optionalAuth, async function(req, res) {
 router.post('/ride/:id/edit', optionalAuth, async function(req, res) {
     var ride = await ownedRide(req, res);
     if (!ride) return;
-    var returnTo = (req.body.returnTo || '/profile').replace(/[^a-zA-Z0-9/?=&_-]/g, '');
+    var rawReturn = req.body.returnTo || '/profile';
+    var returnTo = (rawReturn.startsWith('/') && !rawReturn.startsWith('//')) ? rawReturn : '/profile';
 
     var fields = {
         request_origin:      (req.body.request_origin || '').trim() || null,
@@ -104,7 +106,8 @@ router.post('/ride/:id/edit', optionalAuth, async function(req, res) {
 router.post('/ride/:id/delete', optionalAuth, async function(req, res) {
     var ride = await ownedRide(req, res);
     if (!ride) return;
-    var returnTo = (req.body.returnTo || '/profile').replace(/[^a-zA-Z0-9/?=&_-]/g, '');
+    var rawReturn = req.body.returnTo || '/profile';
+    var returnTo = (rawReturn.startsWith('/') && !rawReturn.startsWith('//')) ? rawReturn : '/profile';
 
     try {
         await deleteRequest(ride.id, req.user.phone);
