@@ -72,6 +72,30 @@ function clusterSummary(cluster, tier, tzPref) {
     return needs.length + ' rider' + (needs.length > 1 ? 's' : '') + ' headed this way &mdash; no driver yet';
 }
 
+var PREF_PILL_MAP = {
+    will_drive: { icon: '\u{1F697}', label: 'Will drive' },
+    rental:     { icon: '\u{1F511}', label: 'Rental car' },
+    cab:        { icon: '\u{1F695}', label: 'Cab / Uber' },
+    flexible:   { icon: '\u{1F91D}', label: 'Flexible' },
+};
+function buildExtrasHtml(details) {
+    details = details || {};
+    var pills = [];
+    if (details.seats) {
+        pills.push('<span class="extra-pill ep-seats">💺 ' + parseInt(details.seats, 10) + ' seat' + (details.seats > 1 ? 's' : '') + '</span>');
+    }
+    var prefs = Array.isArray(details.prefs) ? details.prefs : [];
+    prefs.forEach(function(p) {
+        var info = PREF_PILL_MAP[p];
+        if (info) pills.push('<span class="extra-pill">' + info.icon + ' ' + escHtml(info.label) + '</span>');
+    });
+    if (details.prefs_other) {
+        pills.push('<span class="extra-pill ep-other">💬 ' + escHtml(String(details.prefs_other).slice(0, 40)) + '</span>');
+    }
+    if (!pills.length) return '';
+    return '<div class="person-extras">' + pills.join('') + '</div>';
+}
+
 function personHtml(req, tier, userPhone, verifiedSet, tzPref, clusterFrom, clusterTo, clusterDate) {
     var isOffer = req.request_type === 'offer';
     var typeClass = isOffer ? 'offer' : 'need';
@@ -159,6 +183,8 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref, clusterFrom, clus
         metaHtml = '<div class="person-meta">' + (sent ? 'sent ' + sent : '') + '</div>';
     }
 
+    var extrasHtml = buildExtrasHtml(req.request_details);
+
     return '<div class="person-card ' + typeClass + '">' +
         '<div class="person-top">' +
             '<span class="type-badge ' + typeClass + '">' + badge + '</span>' +
@@ -168,6 +194,7 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref, clusterFrom, clus
             '<span class="person-depart">' + (req.ride_plan_time ? timeStr : '&mdash;') + '</span>' +
         '</div>' +
         msgHtml +
+        extrasHtml +
         metaHtml +
     '</div>';
 }
@@ -509,11 +536,51 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '<form id="pm-form" onsubmit="submitRide(event)" style="display:none;padding:16px 20px 20px;">' +
         '<div class="pm-field"><div class="pm-label">I am...</div><div class="pm-radios"><label class="pm-radio"><input type="radio" name="type" value="need" required> Looking for a ride</label><label class="pm-radio"><input type="radio" name="type" value="offer"> Offering a ride</label></div></div>' +
         '<div class="pm-row">' +
-        '<div class="pm-field"><div class="pm-label">From</div><select name="origin" required onchange="pmHandleOther(\'origin\',this.value)"><option value="">City...</option><option>College Station</option><option>Bryan</option><option>Houston</option><option>Dallas</option><option>Fort Worth</option><option>Austin</option><option value="Other">Other...</option></select><input type="text" name="originOther" placeholder="City name" class="pm-other" style="display:none"></div>' +
-        '<div class="pm-field"><div class="pm-label">To</div><select name="destination" required onchange="pmHandleOther(\'destination\',this.value)"><option value="">City...</option><option>College Station</option><option>Bryan</option><option>Houston</option><option>Dallas</option><option>Fort Worth</option><option>Austin</option><option value="Other">Other...</option></select><input type="text" name="destinationOther" placeholder="City name" class="pm-other" style="display:none"></div>' +
+        '<div class="pm-field"><div class="pm-label">From</div><select name="origin" required onchange="pmHandleOther(\'origin\',this.value);pmUpdateAirport()"><option value="">City...</option><option>College Station</option><option>Bryan</option><option>Houston</option><option>Dallas</option><option>Fort Worth</option><option>Austin</option><option value="Other">Other...</option></select><input type="text" name="originOther" placeholder="City name" class="pm-other" style="display:none"></div>' +
+        '<div class="pm-field"><div class="pm-label">To</div><select name="destination" required onchange="pmHandleOther(\'destination\',this.value);pmUpdateAirport()"><option value="">City...</option><option>College Station</option><option>Bryan</option><option>Houston</option><option>Dallas</option><option>Fort Worth</option><option>Austin</option><option value="Other">Other...</option></select><input type="text" name="destinationOther" placeholder="City name" class="pm-other" style="display:none"></div>' +
         '</div>' +
         '<div class="pm-row"><div class="pm-field"><div class="pm-label">Date</div><input type="date" name="date" id="pm-date" required></div><div class="pm-field"><div class="pm-label">Time <span class="pm-opt">optional</span></div><input type="time" name="time"></div></div>' +
         '<div class="pm-field"><div class="pm-label">Description</div><textarea name="comments" required placeholder="e.g. Need 1 seat. Flexible on timing. Happy to split gas." rows="3"></textarea></div>' +
+        '<div class="pm-section-hdr">Additional info <span class="pm-opt">optional</span></div>' +
+        '<div class="pm-field"><div class="pm-label">Seats</div>' +
+        '<div style="display:flex;align-items:center;gap:10px"><div class="pm-stepper">' +
+        '<button type="button" onclick="pmAdjSeats(-1)">−</button>' +
+        '<span id="pm-seat-display">1</span>' +
+        '<button type="button" onclick="pmAdjSeats(1)">+</button>' +
+        '</div><span class="pm-opt">available / needed</span>' +
+        '<input type="hidden" name="seats" id="pm-seats-val" value="1"></div></div>' +
+        '<div class="pm-field"><div class="pm-label">Transport <span class="pm-opt">pick all that apply</span></div>' +
+        '<div class="pm-chips">' +
+        '<label class="pref-chip"><input type="checkbox" name="prefs" value="will_drive" onchange="this.parentNode.classList.toggle(\'sel\',this.checked)">🚗 Will drive</label>' +
+        '<label class="pref-chip"><input type="checkbox" name="prefs" value="rental" onchange="this.parentNode.classList.toggle(\'sel\',this.checked)">🔑 Rental</label>' +
+        '<label class="pref-chip"><input type="checkbox" name="prefs" value="cab" onchange="this.parentNode.classList.toggle(\'sel\',this.checked)">🚕 Cab/Uber</label>' +
+        '<label class="pref-chip"><input type="checkbox" name="prefs" value="flexible" onchange="this.parentNode.classList.toggle(\'sel\',this.checked)">🤝 Flexible</label>' +
+        '<label class="pref-chip pref-other" id="pmOtherLabel"><input type="checkbox" name="prefs" value="other" onchange="this.parentNode.classList.toggle(\'sel\',this.checked);var oi=document.getElementById(\'pm-prefs-other\');oi.style.display=this.checked?\'block\':\'none\';if(this.checked)oi.focus();">✏️ Other…</label>' +
+        '</div>' +
+        '<input type="text" name="prefs_other" id="pm-prefs-other" placeholder="e.g. No smoking, have a dog…" class="pm-other" style="display:none;margin-top:8px"></div>' +
+        '<div id="pm-airport-section" style="display:none">' +
+        '<div class="pm-field"><div class="pm-label" id="pm-airport-lbl">Airport trip?</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+        '<span style="font-size:12px;color:#8e8e93" id="pm-airport-desc"></span>' +
+        '<button type="button" class="pm-tog-btn" id="pm-airport-toggle" onclick="pmToggleAirport()"></button>' +
+        '</div>' +
+        '<div id="pm-airport-sub" style="display:none">' +
+        '<div class="pm-airport-chips" id="pm-airport-hou" style="display:none">' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'IAH\')">IAH — Bush</div>' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'HOU\')">HOU — Hobby</div>' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'not_sure\')">Not sure</div>' +
+        '</div>' +
+        '<div class="pm-airport-chips" id="pm-airport-dfw" style="display:none">' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'DFW\')">DFW — Dallas/FW</div>' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'DAL\')">DAL — Love Field</div>' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'not_sure\')">Not sure</div>' +
+        '</div>' +
+        '<div class="pm-airport-chips" id="pm-airport-aus" style="display:none">' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'AUS\')">AUS — Austin-Bergstrom</div>' +
+        '<div class="airport-chip" onclick="pmSelAirport(this,\'not_sure\')">Not sure</div>' +
+        '</div>' +
+        '<input type="hidden" name="airport" id="pm-airport-val">' +
+        '</div></div></div>' +
         '<div class="pm-field"><div class="pm-label">Your name</div><input type="text" name="name" id="pm-name" required maxlength="60" placeholder="Your name"></div>' +
         '<div class="pm-field"><div class="pm-label">WhatsApp number</div><div id="pm-phone-nudge" class="pm-nudge" style="display:none">Your number will be shared with matches. Verify below to post.</div><input type="text" name="phone" id="pm-phone" placeholder="e.g. 19791234567 or 919953477576" inputmode="numeric"><div class="pm-phone-hint">No + needed &mdash; include country code &nbsp;&#183;&nbsp; US: <code>1...</code> &nbsp;&#183;&nbsp; India: <code>91...</code></div></div>' +
         '<div id="pm-err" class="pm-err" style="display:none"></div>' +
@@ -647,6 +714,28 @@ var CSS = [
 '.person-tag { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: #6b7280; background: #f3f4f6; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }',
 '.person-depart { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }',
 '.person-msg { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }',
+'.person-extras { display: flex; flex-wrap: wrap; gap: 6px; margin: 5px 0 4px; }',
+'.extra-pill { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 12px; background: #f3f4f6; color: #374151; }',
+'.ep-seats { background: #fef3e2; color: #92400e; }',
+'.ep-airport { background: #e0e7ff; color: #3730a3; }',
+'.ep-other { background: #f5f0ff; color: #5e35b1; }',
+'.pref-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; border: 1.5px solid #e5e5ea; background: #fafafa; cursor: pointer; user-select: none; }',
+'.pref-chip input { display: none; }',
+'.pref-chip.sel { background: #500000; border-color: #500000; color: #fff; }',
+'.pref-other { border-style: dashed; color: #8e8e93; }',
+'.pref-other.sel { border-style: solid; color: #fff; }',
+'.pm-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }',
+'.pm-section-hdr { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #500000; margin: 14px 0 6px; }',
+'.pm-stepper { display: flex; align-items: center; border: 1px solid #e5e5ea; border-radius: 8px; overflow: hidden; }',
+'.pm-stepper button { width: 36px; height: 36px; border: none; background: #fafafa; font-size: 18px; cursor: pointer; color: #500000; }',
+'.pm-stepper span { min-width: 36px; text-align: center; font-size: 15px; font-weight: 600; border-left: 1px solid #e5e5ea; border-right: 1px solid #e5e5ea; line-height: 36px; }',
+'.pm-tog-btn { width: 44px; height: 26px; border-radius: 13px; background: #e5e5ea; border: none; position: relative; cursor: pointer; transition: background .2s; flex-shrink: 0; }',
+'.pm-tog-btn.on { background: #34c759; }',
+'.pm-tog-btn::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .2s; }',
+'.pm-tog-btn.on::after { transform: translateX(18px); }',
+'.pm-airport-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }',
+'.airport-chip { display: inline-block; padding: 5px 12px; border-radius: 14px; font-size: 12px; font-weight: 500; border: 1.5px solid #e5e5ea; background: #fafafa; cursor: pointer; color: #1c1c1e; user-select: none; }',
+'.airport-chip.sel { background: #007aff; border-color: #007aff; color: #fff; }',
 '.person-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }',
 '.person-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }',
 '.person-footer .person-meta { margin-top: 0; }',
@@ -831,10 +920,17 @@ var JS = [
 'function closePostModal(){var o=document.getElementById("pmOverlay");if(o)o.classList.remove("open");document.body.style.overflow="";if(_pmPollTimer){clearInterval(_pmPollTimer);_pmPollTimer=null;}}',
 'document.addEventListener("keydown",function(e){if(e.key==="Escape"){var o=document.getElementById("pmOverlay");if(o&&o.classList.contains("open"))closePostModal();}});',
 'function pmHandleOther(field,val){var inp=document.querySelector("[name=\'"+field+"Other\']");if(!inp)return;if(val==="Other"){inp.style.display="block";inp.required=true;inp.focus();}else{inp.style.display="none";inp.required=false;inp.value="";}}',
+'var PM_AIRPORT_MAP={Houston:"hou",Dallas:"dfw","Fort Worth":"dfw",Austin:"aus"};',
+'var _pmAirportOn=false;',
+'var _pmSeats=1;',
+'function pmAdjSeats(d){_pmSeats=Math.max(1,Math.min(8,_pmSeats+d));document.getElementById("pm-seat-display").textContent=_pmSeats;document.getElementById("pm-seats-val").value=_pmSeats;}',
+'function pmUpdateAirport(){var fromSel=document.querySelector("[name=origin]");var toSel=document.querySelector("[name=destination]");var from=fromSel?fromSel.value:"";var to=toSel?toSel.value:"";var cityKey=PM_AIRPORT_MAP[from]||(PM_AIRPORT_MAP[to]||null);var sec=document.getElementById("pm-airport-section");if(!cityKey){if(sec)sec.style.display="none";_pmAirportOn=false;return;}sec.style.display="block";var isOrigin=!!PM_AIRPORT_MAP[from];document.getElementById("pm-airport-desc").textContent="Is the "+(isOrigin?"origin":"destination")+" an airport?";["hou","dfw","aus"].forEach(function(k){var el=document.getElementById("pm-airport-"+k);if(el)el.style.display="none";});var grp=document.getElementById("pm-airport-"+cityKey);if(grp&&_pmAirportOn)grp.style.display="flex";}',
+'function pmToggleAirport(){_pmAirportOn=!_pmAirportOn;var tog=document.getElementById("pm-airport-toggle");var sub=document.getElementById("pm-airport-sub");if(tog)tog.classList.toggle("on",_pmAirportOn);if(sub)sub.style.display=_pmAirportOn?"block":"none";if(_pmAirportOn){var fromSel=document.querySelector("[name=origin]");var toSel=document.querySelector("[name=destination]");var from=fromSel?fromSel.value:"";var to=toSel?toSel.value:"";var cityKey=PM_AIRPORT_MAP[from]||(PM_AIRPORT_MAP[to]||null);if(cityKey){["hou","dfw","aus"].forEach(function(k){var el=document.getElementById("pm-airport-"+k);if(el)el.style.display="none";});var grp=document.getElementById("pm-airport-"+cityKey);if(grp)grp.style.display="flex";}}else{document.getElementById("pm-airport-val").value="";document.querySelectorAll(".airport-chip").forEach(function(c){c.classList.remove("sel");});}}',
+'function pmSelAirport(el,code){document.querySelectorAll(".airport-chip").forEach(function(c){c.classList.remove("sel");});el.classList.add("sel");document.getElementById("pm-airport-val").value=code;}',
 'var _pmPollTimer=null;',
 'function pmStartPolling(){if(_pmPollTimer)return;_pmPollTimer=setInterval(async function(){try{var r=await fetch("/api/session-tier");var d=await r.json();if(d.tier>=2){clearInterval(_pmPollTimer);_pmPollTimer=null;pmUnlockForm(d.phone);}}catch(e){}},3000);}',
 'function pmUnlockForm(phone){_userTier=2;_userPhone=phone||"";var cta=document.getElementById("pm-verify-cta");var flash=document.getElementById("pm-verified-flash");var btn=document.getElementById("pm-submit");var nudge=document.getElementById("pm-phone-nudge");var pi=document.getElementById("pm-phone");if(cta)cta.style.display="none";if(flash)flash.style.display="block";if(btn){btn.disabled=false;btn.style.opacity="";btn.style.display="block";btn.title="";}if(pi&&phone){pi.value="+"+phone;pi.readOnly=true;pi.style.background="#f5f5f7";}if(nudge)nudge.style.display="none";}',
-'async function submitRide(e){e.preventDefault();var form=e.target;var btn=document.getElementById("pm-submit");var errEl=document.getElementById("pm-err");errEl.style.display="none";btn.disabled=true;btn.textContent="Posting...";var data={};var fd=new FormData(form);fd.forEach(function(v,k){data[k]=v;});if(data.origin==="Other")data.origin=data.originOther||"";if(data.destination==="Other")data.destination=data.destinationOther||"";delete data.originOther;delete data.destinationOther;try{var r=await fetch("/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var j=await r.json();if(!r.ok){errEl.textContent=j.error||"Something went wrong.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";return;}window.location.href="/profile?submitted=1&matches="+(j.matches||0);}catch(err){errEl.textContent="Network error. Please try again.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";}}',
+'async function submitRide(e){e.preventDefault();var form=e.target;var btn=document.getElementById("pm-submit");var errEl=document.getElementById("pm-err");errEl.style.display="none";btn.disabled=true;btn.textContent="Posting...";var data={prefs:[]};var fd=new FormData(form);fd.forEach(function(v,k){if(k==="prefs"){data.prefs.push(v);}else{data[k]=v;}});if(data.origin==="Other")data.origin=data.originOther||"";if(data.destination==="Other")data.destination=data.destinationOther||"";delete data.originOther;delete data.destinationOther;try{var r=await fetch("/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var j=await r.json();if(!r.ok){errEl.textContent=j.error||"Something went wrong.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";return;}window.location.href="/profile?submitted=1&matches="+(j.matches||0);}catch(err){errEl.textContent="Network error. Please try again.";errEl.style.display="block";btn.disabled=false;btn.textContent="Post Ride";}}',
 'function shareRideCard(btn){var from=btn.getAttribute("data-from");var to=btn.getAttribute("data-to");var date=btn.getAttribute("data-date");var d=new Date(date+"T12:00:00");var dateStr=d.toLocaleDateString("en-US",{month:"short",day:"numeric"});var url="https://ridesplit.app/?from="+encodeURIComponent(from)+"&to="+encodeURIComponent(to)+"&date="+encodeURIComponent(date);var text=from+" → "+to+" · "+dateStr;var full=text+"\\n"+url;if(navigator.share){navigator.share({title:text,url:url}).catch(function(){});}else{navigator.clipboard.writeText(full).then(function(){btn.textContent="Copied!";btn.classList.add("copied");setTimeout(function(){btn.innerHTML="🔗 Share";btn.classList.remove("copied");},2000);}).catch(function(){});}}',
 '(function(){var p=new URLSearchParams(window.location.search);var from=p.get("from"),to=p.get("to"),date=p.get("date");if(!from||!to||!date)return;var clean=new URL(window.location.href);clean.searchParams.delete("from");clean.searchParams.delete("to");clean.searchParams.delete("date");history.replaceState(null,"",clean.toString());var clusters=document.querySelectorAll(".cluster");for(var i=0;i<clusters.length;i++){var c=clusters[i];if(c.getAttribute("data-from")===from&&c.getAttribute("data-to")===to&&c.getAttribute("data-date")===date){if(!c.classList.contains("open"))toggleCluster(c);var target=c;setTimeout(function(){target.scrollIntoView({behavior:"smooth",block:"start"});},200);break;}}})();'
 ].join('\n');

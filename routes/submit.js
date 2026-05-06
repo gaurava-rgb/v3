@@ -61,8 +61,19 @@ router.post('/submit', submitLimiter, optionalAuth, async function(req, res) {
     if (time) rawMessage += ' around ' + time;
     if (comments) rawMessage += '. ' + comments;
 
+    var seatsRaw = parseInt(req.body.seats, 10);
+    var seats = (!isNaN(seatsRaw) && seatsRaw >= 1 && seatsRaw <= 8) ? seatsRaw : null;
+    var prefsRaw = req.body.prefs;
+    var prefs = Array.isArray(prefsRaw) ? prefsRaw : (prefsRaw ? [prefsRaw] : []);
+    var prefsOther = (req.body.prefs_other || '').trim() || null;
+    var airport = (req.body.airport || '').trim() || null;
+
     var details = {};
     if (comments) details.description = comments;
+    if (seats)      details.seats      = seats;
+    if (prefs.length) details.prefs    = prefs;
+    if (prefsOther) details.prefs_other = prefsOther;
+    if (airport)    details.airport    = airport;
 
     try {
         var request = await saveRequest({
@@ -80,7 +91,8 @@ router.post('/submit', submitLimiter, optionalAuth, async function(req, res) {
             origin: origin,
             destination: destination,
             details: details,
-            rawMessage: rawMessage
+            rawMessage: rawMessage,
+            tags: (airport && airport !== 'not_sure') ? ['airport'] : []
         });
 
         if (!request) {
