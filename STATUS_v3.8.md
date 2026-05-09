@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.16 | **Date:** May 5, 2026 | **App version:** 3.8.0
+**Version:** 1.17 | **Date:** May 8, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -354,6 +354,23 @@ Three session types, all coexist:
 - `652f6d4` — phone field UX (no + needed, country code hint)
 - `7eb7cef` — profile rides fix (writeClient + drop status column)
 - `024980d` — cluster dedup (one row per contact per cluster)
+
+---
+
+## May 6, 2026 — Ride extras (seats, transport prefs, airport clarification) — DEPLOYED `8bce0b5`
+
+### Changes
+- **Edit form** (`/ride/:id/edit`) — seats stepper (1–8), transport pref chips (Will drive / Rental / Cab/Uber / Flexible / Other free-text), context-aware airport toggle (Houston → IAH/HOU, Dallas/FW → DFW/DAL, Austin → AUS; hidden for CS/Bryan/Other)
+- **FAB post form** — same extras section added below description field
+- **Listing cards** — extras row between message and footer: 💺 seats pill (amber), transport pref pills, 💬 custom-text pill (purple). Airport not duplicated (already shown as tag top-right)
+- **Storage** — all extras in `request_details` JSONB, no schema migration
+- **`/submit` route** — saves seats, prefs, prefs_other, airport to details; sets `tags:['airport']` if airport confirmed
+
+### Analytics note (May 6–8)
+- `v_expand_by_tier` queried for today's cluster opens
+- May 6 today-only: 14 distinct users (10 T0, 0 T1, 4 T2). CS→Houston top cluster.
+- Cumulative for ride_date today+tomorrow: 102 opens (45 T0, 3 T1, 54 T2)
+- `ct → Houston` bad normalization spotted in log (origin "ct" not resolving to College Station)
 
 ---
 
