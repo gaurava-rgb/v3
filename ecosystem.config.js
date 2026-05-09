@@ -21,6 +21,15 @@ module.exports = {
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
         },
         {
+            name: 'aggie-v3-digest',
+            script: 'scripts/cluster-digest.js',
+            cron_restart: '0 * * * *',
+            autorestart: false,
+            watch: false,
+            env: { NODE_ENV: 'production', TZ: 'America/Chicago' },
+            log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+        },
+        {
             name: 'aggie-v3-monitor',
             script: 'monitor.js',
             restart_delay: 3000,

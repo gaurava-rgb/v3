@@ -525,6 +525,33 @@ async function connect() {
     });
 }
 
+// ── outbound queue ─────────────────────────────────────────────────────────
+
+setInterval(async () => {
+    if (!isReady || !sock) return;
+    const { data: pending, error } = await supabase
+        .from('outbound_queue')
+        .select('id, contact, payload, message_type')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(10);
+    if (error) { console.error('[Bot] Outbound poll error:', error.message); return; }
+    for (const row of (pending || [])) {
+        const digits  = (row.contact || '').replace(/\D/g, '');
+        const message = row.payload?.message;
+        if (!digits || !message) continue;
+        const jid = digits + '@s.whatsapp.net';
+        try {
+            await sock.sendMessage(jid, { text: message });
+            await supabase.from('outbound_queue').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', row.id);
+            console.log(`[Bot] Sent ${row.message_type} to ${digits}`);
+        } catch (err) {
+            console.error(`[Bot] Send failed for ${digits}:`, err.message);
+            await supabase.from('outbound_queue').update({ status: 'failed' }).eq('id', row.id);
+        }
+    }
+}, 5000);
+
 // ── group poll ─────────────────────────────────────────────────────────────
 
 setInterval(async () => {
