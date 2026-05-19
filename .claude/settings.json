@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "jq -r '.tool_input.command // \"\"' | grep -q 'pm2 restart ecosystem.config.js' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Deploy detected. If this deploy added/removed/renamed a source file, route, lib module, Supabase table, or PM2 process, update PROJECT_MAP.md now per the project-map skill (bump version, add a changelog row). If only behavior changed, no map update is needed.\"}}' || true",
+            "statusMessage": "Checking deploy for structural changes"
+          }
+        ]
+      }
+    ]
+  }
+}
