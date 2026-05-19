@@ -11,13 +11,13 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 - `normalize.js` — Location name normalization
 - `dashboard.js` — Express entry point, mounts routes/ + middleware/
 - `monitor.js` — PM2 health dashboard
-- `routes/` — clusters.js (homepage + /clusters), housing.js, verify.js, profile.js, auth.js, public.js (/old-home), static.js (/faq, /terms), submit.js, digest.js
-- `lib/` — views.js (HTML), housing.js (cache), profiles.js, wa-verify.js, wa-otp.js
+- `routes/` — clusters.js (homepage + /clusters), housing.js, verify.js, profile.js, auth.js, rides.js (/ride/:id edit+delete), static.js (/faq, /terms), submit.js, digest.js (admin /digest/*)
+- `lib/` — views.js (HTML), housing.js (cache), profiles.js, wa-verify.js, data.js (route data-fetch), dateFilter.js, helpers.js, supabase.js
 - `middleware/auth.js` — optionalAuth, getUserTier (T0/T1/T2)
 
 ## Key Facts
 - Supabase tables: `v3_requests`, `v3_matches`, `v3_message_log`, `outbound_queue`, `wa_contacts`, `monitored_groups`, `user_profiles`, `wa_verify_tokens`, `wa_otp_codes`, `wa_click_log`, `card_expand_log`
-- PM2 processes: `aggie-v3-bot`, `aggie-v3-dash` (port 3004), `aggie-v3-monitor` (port 3005)
+- PM2 processes: `aggie-v3-bot`, `aggie-v3-dash` (port 3004), `aggie-v3-digest` (PM2 cron, hourly), `aggie-v3-monitor` (port 3005)
 - TZ: America/Chicago (set in ecosystem.config.js)
 - Live: ridesplit.app
 - Deploy: `git push && ssh agconnect "cd ~/aggieconnect-v3 && git pull && pm2 restart ecosystem.config.js"`
