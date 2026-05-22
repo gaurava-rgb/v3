@@ -1,14 +1,18 @@
-# Project Map — v1   (updated 2026-05-18)
+# Project Map — v2   (updated 2026-05-22)
 
 > WhatsApp bot that monitors TAMU ride-share groups, parses messages with an
 > LLM, stores them in Supabase, matches ride needs with offers, and serves a
 > web dashboard at ridesplit.app.
 
+**Sub-maps** (detailed reference — created on request, see the project-map skill):
+- [`maps/tech-stack.md`](maps/tech-stack.md) — languages used + the programming concepts behind them.
+
 ## Changelog
 
-| v | date       | change      |
-|---|------------|-------------|
-| 1 | 2026-05-18 | initial map |
+| v | date       | change                                   |
+|---|------------|------------------------------------------|
+| 2 | 2026-05-22 | added maps/ sub-maps — first: tech-stack |
+| 1 | 2026-05-18 | initial map                              |
 
 ---
 
