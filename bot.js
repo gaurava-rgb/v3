@@ -28,6 +28,7 @@ const {
     upsertContact, resolveContactPhone, loadAllContacts
 } = require('./db');
 const { processRequest, formatMatch } = require('./matcher');
+const { queueMatchAlert } = require('./lib/matchAlert');
 
 // ── config ─────────────────────────────────────────────────────────────────
 const BACKFILL_HOURS  = parseInt(process.env.BACKFILL_HOURS  || '24', 10);
@@ -160,6 +161,13 @@ async function processOneMessage(msg, groupName, isBackfill = false) {
     if (matches.length > 0) {
         console.log(`[Bot] ${matches.length} match(es)!`);
         matches.forEach(m => console.log('\n' + formatMatch(m)));
+        if (!isBackfill) {
+            try {
+                await queueMatchAlert(request, matches);
+            } catch (err) {
+                console.error('[Bot] queueMatchAlert failed:', err.message);
+            }
+        }
     }
 }
 
