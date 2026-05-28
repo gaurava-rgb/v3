@@ -102,6 +102,8 @@ Common ride patterns (all return isRequest: true):
 - "can help with groceries" -> offer, help
 - "if anyone going from Dallas to CS plz dm" -> need, ride, origin="Dallas", destination="College Station"
 - "anyone driving from Houston to cstat tomorrow" -> need, ride, origin="Houston", destination="College Station"
+- "Looking for a ride from CS to Austin airport 4pm" -> need, ride, origin="College Station", destination="Austin", tags=["airport"]
+- "ride to DFW Friday" -> need, ride, destination="Dallas", tags=["airport"]
 
 CRITICAL: when message contains "from X to Y" pattern, ALWAYS set origin=X, destination=Y. Never default origin to College Station if "from <city>" is explicit.
 
@@ -169,6 +171,14 @@ TAGS (apply only when message explicitly mentions these tokens):
 - "uscis" — USCIS, biometrics, immigration appointment, OPT biometrics
 - "dps" — DPS, "driver license", "license test", "road test", "Texas DPS"
 - "ssn" — SSN, SSA, Social Security, social security office
+
+AIRPORT → CITY (the airport's own city sets the destination/origin bucket, NOT a default):
+- "Austin airport" / ABIA / AUS / Bergstrom → Austin
+- "Dallas airport" / DFW / Love Field → Dallas
+- "Houston airport" / IAH / Bush / Hobby → Houston
+- "San Antonio airport" / SAT → San Antonio
+- Bare "airport" with NO city named → Houston (IAH is most common)
+- NEVER map "<city> airport" to a different city. "Austin airport" is Austin, never Houston.
 
 TAG RULES:
 - Bare city name with no tag-token in message → tags=[]
