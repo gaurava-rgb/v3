@@ -13,6 +13,8 @@ module.exports = {
         {
             name: 'aggie-v3-dash',
             script: 'dashboard.js',
+            instances: 2,
+            exec_mode: 'cluster',
             restart_delay: 3000,
             max_restarts: 10,
             autorestart: true,
