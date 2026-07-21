@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.17 | **Date:** May 8, 2026 | **App version:** 3.8.0
+**Version:** 1.18 | **Date:** Jul 21, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -578,6 +578,20 @@ Local shell had stale `OPENROUTER_API_KEY` exported — overrode `dotenv.config(
 
 ### Bug fixed (commit `eda6e52`)
 `"\n"` inside a Node.js single-quoted JS-as-string renders as a literal newline byte in the `<script>` block → invalid string literal → entire script killed (all onclick handlers including `toggleCluster` dead). Fixed to `"\\n"`. Key lesson: `node --check` validates the outer Node.js file, not the JS strings inside it.
+
+---
+
+## Jul 21, 2026 — Audit Fixes (security + reliability)
+
+Full audit report: `~/Desktop/ridesplit_audit_2026-07-21.md`
+
+- **Deleted `.env.bak`** (held live keys, was not gitignored); `.gitignore` now covers `.env*` with `!.env.example` exception.
+- **Outbound WhatsApp queue paused** — bot.js poller gated behind `OUTBOUND_ENABLED=1` env var (currently `0` on VPS; pending rows accumulate, nothing sends). Added reentrancy guard so overlapping 5s ticks can no longer double-send the same pending rows when re-enabled.
+- **`aggie-v3-dash` back to single instance** — cluster mode (2 workers) made lib/housing.js per-process caches serve inconsistent board views between refreshes.
+- **`ADMIN_PHONE` moved to env var** (was hardcoded in lib/matchAlert.js); alert skipped with warning if unset.
+- **Deleted dead `scripts/cluster-digest.js`** — superseded by lib/matchAlert.js; would have double-messaged matches if ever re-enabled and computed "today" in UTC.
+- CLAUDE.md PM2 list corrected (3 processes, no digest).
+- Known pre-existing test failures (untouched by this change): matcher.test.js "Houston IAH nearby penalty" case; `tmp_cluster_test.js` picked up by `node --test` due to naming.
 
 ---
 

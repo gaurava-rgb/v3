@@ -13,8 +13,8 @@ module.exports = {
         {
             name: 'aggie-v3-dash',
             script: 'dashboard.js',
-            instances: 2,
-            exec_mode: 'cluster',
+            // single instance — lib/housing.js caches are per-process; cluster workers serve inconsistent staleness
+            instances: 1,
             restart_delay: 3000,
             max_restarts: 10,
             autorestart: true,

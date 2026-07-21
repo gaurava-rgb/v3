@@ -534,29 +534,40 @@ async function connect() {
 }
 
 // ── outbound queue ─────────────────────────────────────────────────────────
+// Paused unless OUTBOUND_ENABLED=1 — rows queue up as 'pending' but nothing sends.
 
+const OUTBOUND_ENABLED = process.env.OUTBOUND_ENABLED === '1';
+if (!OUTBOUND_ENABLED) console.log('[Bot] Outbound queue paused (set OUTBOUND_ENABLED=1 to resume sending)');
+
+let outboundPolling = false;
 setInterval(async () => {
-    if (!isReady || !sock) return;
-    const { data: pending, error } = await supabase
-        .from('outbound_queue')
-        .select('id, contact, payload, message_type')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
-        .limit(10);
-    if (error) { console.error('[Bot] Outbound poll error:', error.message); return; }
-    for (const row of (pending || [])) {
-        const digits  = (row.contact || '').replace(/\D/g, '');
-        const message = row.payload?.message;
-        if (!digits || !message) continue;
-        const jid = digits + '@s.whatsapp.net';
-        try {
-            await sock.sendMessage(jid, { text: message });
-            await supabase.from('outbound_queue').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', row.id);
-            console.log(`[Bot] Sent ${row.message_type} to ${digits}`);
-        } catch (err) {
-            console.error(`[Bot] Send failed for ${digits}:`, err.message);
-            await supabase.from('outbound_queue').update({ status: 'failed' }).eq('id', row.id);
+    if (!OUTBOUND_ENABLED || !isReady || !sock) return;
+    if (outboundPolling) return; // a slow batch must not overlap the next tick — overlap re-sends the same pending rows
+    outboundPolling = true;
+    try {
+        const { data: pending, error } = await supabase
+            .from('outbound_queue')
+            .select('id, contact, payload, message_type')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: true })
+            .limit(10);
+        if (error) { console.error('[Bot] Outbound poll error:', error.message); return; }
+        for (const row of (pending || [])) {
+            const digits  = (row.contact || '').replace(/\D/g, '');
+            const message = row.payload?.message;
+            if (!digits || !message) continue;
+            const jid = digits + '@s.whatsapp.net';
+            try {
+                await sock.sendMessage(jid, { text: message });
+                await supabase.from('outbound_queue').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', row.id);
+                console.log(`[Bot] Sent ${row.message_type} to ${digits}`);
+            } catch (err) {
+                console.error(`[Bot] Send failed for ${digits}:`, err.message);
+                await supabase.from('outbound_queue').update({ status: 'failed' }).eq('id', row.id);
+            }
         }
+    } finally {
+        outboundPolling = false;
     }
 }, 5000);
 

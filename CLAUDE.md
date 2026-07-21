@@ -17,7 +17,8 @@ WhatsApp bot monitoring TAMU ride-share groups. Parses messages with LLM, stores
 
 ## Key Facts
 - Supabase tables: `v3_requests`, `v3_matches`, `v3_message_log`, `outbound_queue`, `wa_contacts`, `monitored_groups`, `user_profiles`, `wa_verify_tokens`, `wa_otp_codes`, `wa_click_log`, `card_expand_log`
-- PM2 processes: `aggie-v3-bot`, `aggie-v3-dash` (port 3004), `aggie-v3-digest` (PM2 cron, hourly), `aggie-v3-monitor` (port 3005)
+- PM2 processes: `aggie-v3-bot`, `aggie-v3-dash` (port 3004, single instance — housing caches are per-process), `aggie-v3-monitor` (port 3005). No digest process — hourly digest was replaced by event-driven `lib/matchAlert.js`, fired from bot.js.
+- Outbound WhatsApp queue (bot.js) is paused unless `OUTBOUND_ENABLED=1` in .env; match-alert target phone comes from `ADMIN_PHONE` env var
 - TZ: America/Chicago (set in ecosystem.config.js)
 - Live: ridesplit.app
 - Deploy: `git push && ssh agconnect "cd ~/aggieconnect-v3 && git pull && pm2 restart ecosystem.config.js"`
