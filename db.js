@@ -477,17 +477,20 @@ async function saveMatch(needId, offerId, score = 1.0, match_quality = 'medium')
 // ============================================================
 
 async function getStats() {
-    const { data: requests } = await supabase
-        .from('v3_requests')
-        .select('request_type, request_category, request_status');
-
-    return {
-        total: requests?.length || 0,
-        needs: requests?.filter(r => r.request_type === 'need').length || 0,
-        offers: requests?.filter(r => r.request_type === 'offer').length || 0,
-        open: requests?.filter(r => r.request_status === 'open').length || 0,
-        matched: requests?.filter(r => r.request_status === 'matched').length || 0
+    // head-only count queries — a full select is capped at 1000 rows and undercounts
+    const countWhere = (col, val) => {
+        let q = supabase.from('v3_requests').select('id', { count: 'exact', head: true });
+        if (col) q = q.eq(col, val);
+        return q.then(({ count }) => count || 0);
     };
+    const [total, needs, offers, open, matched] = await Promise.all([
+        countWhere(),
+        countWhere('request_type', 'need'),
+        countWhere('request_type', 'offer'),
+        countWhere('request_status', 'open'),
+        countWhere('request_status', 'matched')
+    ]);
+    return { total, needs, offers, open, matched };
 }
 
 // ============================================================

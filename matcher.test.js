@@ -108,10 +108,10 @@ describe('calculateScore', () => {
         assert.equal(score, 0.9);
     });
 
-    it('applies nearby penalty for Houston IAH ↔ Houston', () => {
+    it('treats IAH ↔ Houston as exact match (airports normalize to their city)', () => {
         const req = { ride_plan_date: '2026-03-25', request_category: 'ride', request_destination: 'IAH' };
         const match = { ride_plan_date: '2026-03-25', request_destination: 'Houston' };
-        assert.equal(calculateScore(req, match), 0.9);
+        assert.equal(calculateScore(req, match), 1);
     });
 
     it('penalizes different known destinations (0.6)', () => {

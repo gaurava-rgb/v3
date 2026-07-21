@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.18 | **Date:** Jul 21, 2026 | **App version:** 3.8.0
+**Version:** 1.19 | **Date:** Jul 21, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -578,6 +578,15 @@ Local shell had stale `OPENROUTER_API_KEY` exported — overrode `dotenv.config(
 
 ### Bug fixed (commit `eda6e52`)
 `"\n"` inside a Node.js single-quoted JS-as-string renders as a literal newline byte in the `<script>` block → invalid string literal → entire script killed (all onclick handlers including `toggleCluster` dead). Fixed to `"\\n"`. Key lesson: `node --check` validates the outer Node.js file, not the JS strings inside it.
+
+---
+
+## Jul 21, 2026 — Audit Fixes round 2 (pills + cleanup + counts)
+
+- **Filter pills curated**: homepage TO/FROM pills now only show LOCATION_MAP cities (`isKnownLocation` gate in routes/clusters.js) — parser pass-throughs ("FIFA watch party", apartment names, foreign cities) no longer pollute the filter bar; cards still show everything.
+- **Count queries**: `db.getStats()` and monitor.js now use head-only `count: 'exact'` queries instead of full-table selects (which Supabase caps at 1000 rows — startup stat was undercounting).
+- **Root cleanup**: 25 files (11 one-off scripts, 13 stale sprint/progress docs, mockup-housing.html) moved to `_archived/root-cleanup-2026-07/`; `mockups/` (18 MB) moved to Trash; pending `public/` deletions committed.
+- **Tests green (51/51)**: `npm test` pinned to `node --test *.test.js` (stopped picking up archived files); stale IAH↔Houston matcher test updated — airports normalize to their city since `348c757`, so exact match 1.0 is correct, not the 0.9 nearby penalty.
 
 ---
 

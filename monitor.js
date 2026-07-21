@@ -72,17 +72,32 @@ function bar(n, max, width = 20) {
 
 // ── data fetchers ──────────────────────────────────────────────────────────
 
+// head-only count of v3_requests rows matching the given filters — avoids
+// pulling the whole table (capped at 1000 rows) every 30s refresh
+function countReqs(filters) {
+    let q = sb.from('v3_requests').select('id', { count: 'exact', head: true });
+    for (const [col, val] of filters || []) q = q.eq(col, val);
+    return q.then(({ count }) => count || 0);
+}
+
 async function fetchAll() {
     const [
         pm2,
-        { data: reqs },
-        { data: matches, count: matchCount },
+        reqCounts,
+        { count: matchCount },
         { data: groups },
         { data: msgLog },
         { data: logErrors }
     ] = await Promise.all([
         pm2List(),
-        sb.from('v3_requests').select('request_type, request_status, created_at'),
+        Promise.all([
+            countReqs(),
+            countReqs([['request_type', 'need']]),
+            countReqs([['request_type', 'offer']]),
+            countReqs([['request_status', 'matched']]),
+            countReqs([['request_status', 'open'], ['request_type', 'need']]),
+            countReqs([['request_status', 'open'], ['request_type', 'offer']])
+        ]),
         sb.from('v3_matches').select('id', { count: 'exact', head: true }),
         sb.from('monitored_groups').select('group_name, group_id, active').order('group_name'),
         sb.from('v3_message_log')
@@ -96,13 +111,21 @@ async function fetchAll() {
             .limit(8)
     ]);
 
-    return { pm2, reqs: reqs || [], matchCount: matchCount || 0, groups: groups || [], msgLog: msgLog || [], logErrors: logErrors || [] };
+    const [reqTotal, reqNeeds, reqOffers, reqMatched, reqOpenNeeds, reqOpenOffers] = reqCounts;
+    return {
+        pm2,
+        reqCounts: { total: reqTotal, needs: reqNeeds, offers: reqOffers, matched: reqMatched, openNeeds: reqOpenNeeds, openOffers: reqOpenOffers },
+        matchCount: matchCount || 0,
+        groups: groups || [],
+        msgLog: msgLog || [],
+        logErrors: logErrors || []
+    };
 }
 
 // ── report builder ────────────────────────────────────────────────────────
 
 async function buildReport() {
-    const { pm2, reqs, matchCount, groups, msgLog, logErrors } = await fetchAll();
+    const { pm2, reqCounts, matchCount, groups, msgLog, logErrors } = await fetchAll();
     const now = new Date();
     const nowStr = now.toLocaleString('en-US', { timeZone: 'America/Chicago', hour12: false });
 
@@ -178,20 +201,15 @@ async function buildReport() {
 
     // ── database ──
     section('DATABASE  (v3_* tables)');
-    const open = reqs.filter(r => r.request_status === 'open');
-    const matched = reqs.filter(r => r.request_status === 'matched');
-    const needs = reqs.filter(r => r.request_type === 'need');
-    const offers = reqs.filter(r => r.request_type === 'offer');
-    const openNeeds = open.filter(r => r.request_type === 'need');
-    const openOffers = open.filter(r => r.request_type === 'offer');
-    const maxBar = Math.max(needs.length, offers.length, 1);
+    const { total, needs, offers, matched, openNeeds, openOffers } = reqCounts;
+    const maxBar = Math.max(needs, offers, 1);
 
-    ln(`  Total requests:  ${reqs.length}`);
+    ln(`  Total requests:  ${total}`);
     ln(`  Match records:   ${matchCount}`);
     ln('');
-    ln(`  needs  ${col(needs.length, 4)}  ${bar(needs.length, maxBar, 24)}  open: ${openNeeds.length}`);
-    ln(`  offers ${col(offers.length, 4)}  ${bar(offers.length, maxBar, 24)}  open: ${openOffers.length}`);
-    ln(`  matched ${col(matched.length, 3)}`);
+    ln(`  needs  ${col(needs, 4)}  ${bar(needs, maxBar, 24)}  open: ${openNeeds}`);
+    ln(`  offers ${col(offers, 4)}  ${bar(offers, maxBar, 24)}  open: ${openOffers}`);
+    ln(`  matched ${col(matched, 3)}`);
 
     // ── parser health ──
     section('PARSER HEALTH  (last 20 messages)');

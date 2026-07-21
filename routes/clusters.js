@@ -8,6 +8,7 @@ var router = express.Router();
 var { readClient } = require('../lib/supabase');
 var { escHtml, formatDate, formatTime, formatMsgTime, fmtMsgTimeTz, fmtRideTimeTz, fmtRideDateTz, tzMeta, buildClusters, displayName, GA_TAG } = require('../lib/helpers');
 var { filterActiveRequests, buildTestGroupSet } = require('../lib/dateFilter');
+var { isKnownLocation } = require('../normalize');
 var { optionalAuth, getUserTier } = require('../middleware/auth');
 
 // ── College Station is the hub ──────────────────────────────────────────
@@ -320,11 +321,12 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
             return a.localeCompare(b);
         });
 
-        // Collect all unique cities for filter pills
+        // Collect unique cities for filter pills — curated LOCATION_MAP cities only;
+        // parser pass-throughs (event names, apartment names, foreign cities) stay on cards but not in the filter bar
         var citySet = {};
         for (var ai = 0; ai < allReqs.length; ai++) {
-            if (allReqs[ai].request_destination) citySet[allReqs[ai].request_destination] = true;
-            if (allReqs[ai].request_origin) citySet[allReqs[ai].request_origin] = true;
+            if (allReqs[ai].request_destination && isKnownLocation(allReqs[ai].request_destination)) citySet[allReqs[ai].request_destination] = true;
+            if (allReqs[ai].request_origin && isKnownLocation(allReqs[ai].request_origin)) citySet[allReqs[ai].request_origin] = true;
         }
         var cities = Object.keys(citySet).sort();
 

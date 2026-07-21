@@ -8,3 +8,11 @@ _archived/
 skills/
 skills-lock.json
 dashboard/
+
+# local data/docs — never publish
+analytics/
+groupme/
+groupme.txt
+docs/
+kapso_knowledgebase.md
+use_cases.md
