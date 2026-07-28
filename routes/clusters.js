@@ -260,6 +260,7 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
         var results = await Promise.all([
             readClient.from('v3_requests').select('*')
                 .eq('request_category', 'ride')
+                .neq('request_status', 'deleted')
                 .or('ride_plan_date.gte.' + today + ',date_fuzzy.eq.true,ride_plan_date.is.null')
                 .order('created_at', { ascending: false }),
             readClient.from('monitored_groups').select('group_id, group_name, is_test').eq('active', true),
