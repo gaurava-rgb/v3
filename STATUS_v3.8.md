@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.19 | **Date:** Jul 21, 2026 | **App version:** 3.8.0
+**Version:** 1.20 | **Date:** Jul 28, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -581,6 +581,16 @@ Local shell had stale `OPENROUTER_API_KEY` exported — overrode `dotenv.config(
 
 ---
 
+## Jul 28, 2026 — Deleted rides stayed visible — DEPLOYED `590a4c3`
+
+- **Bug**: `deleteRequest()` soft-deletes (`request_status = 'deleted'`) but no display query filtered on it. Only `findMatches`/`findExistingRequest` in db.js checked `request_status = 'open'`, so deleted rides kept rendering on `/`, `/clusters` and `/profile` forever. Users clicked Delete, saw the card again, and assumed it failed.
+- **Fix**: added `.neq('request_status', 'deleted')` to 4 read queries — `routes/clusters.js:262` (homepage + /clusters), `lib/data.js` `fetchSameWayClusters`, `fetchUserListings` (profile), `fetchOpenMatches`.
+- **Scope at time of fix**: 7 soft-deleted rides were still live in the board data (gaurav_a ×1, Mani Kiran ×3, arvinder.mundra ×2, Devarshi Joshi ×1).
+- **Verified**: same-instant A/B against prod data — without filter the target row rendered in a cluster, with filter it did not; live homepage `4:44 PM` markers 2 → 0, person rows 45 → 42 after restart.
+- Dashboard-only change, so restarted `aggie-v3-dash` alone — `aggie-v3-bot` left untouched (live WA session, 7d uptime preserved).
+
+---
+
 ## Jul 21, 2026 — Audit Fixes round 2 (pills + cleanup + counts)
 
 - **Filter pills curated**: homepage TO/FROM pills now only show LOCATION_MAP cities (`isKnownLocation` gate in routes/clusters.js) — parser pass-throughs ("FIFA watch party", apartment names, foreign cities) no longer pollute the filter bar; cards still show everything.
@@ -616,6 +626,7 @@ Full audit report: `~/Desktop/ridesplit_audit_2026-07-21.md`
 - monitor.js (port 3005) not routed through dashboard.js — accessible only direct
 - No telemetry on match outcome quality (matches created but no feedback loop)
 - Bryan→College Station normalization edge case still open
+- **Parser overrides stated destination with airport city** — "Looking for ride from College Station to Bryan around 16:44" was stored as destination `Houston` with an AIRPORT tag (row `4d006d56`, gaurav_a, Aug 1). Message named no airport, so the airport inference is firing on something else and beating the explicit destination.
 
 ---
 
