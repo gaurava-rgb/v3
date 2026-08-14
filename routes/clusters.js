@@ -138,7 +138,7 @@ function personHtml(req, tier, userPhone, verifiedSet, tzPref, clusterFrom, clus
         // T1 locked ghost button — same slot as T2 green button
         waBtn = '<a class="wa-contact-btn wa-locked" href="/verify/wa?returnTo=/" onclick="event.stopPropagation()">' +
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-            'Verify to unlock DM' +
+            'Verify to message' +
             '</a>';
     }
     if (tier >= 2 && req.source_contact) {
@@ -221,6 +221,18 @@ function clusterHtml(cluster, direction, tier, userPhone, verifiedSet, tzPref) {
     for (var i = 0; i < cluster.offers.length; i++) personCards += personHtml(cluster.offers[i], tier, userPhone, verifiedSet, tzPref, cluster.origin, cluster.destination, cluster.repDate);
     for (var j = 0; j < cluster.needs.length; j++) personCards += personHtml(cluster.needs[j], tier, userPhone, verifiedSet, tzPref, cluster.origin, cluster.destination, cluster.repDate);
 
+    // Anon: one concrete sign-in CTA per ride, tied to this exact route
+    var anonCta = '';
+    if (tier === 0) {
+        anonCta = '<div class="cluster-signin-cta">' +
+            '<div class="cluster-signin-head">&#128274; To reach the ' + totalCount + ' ' + (totalCount === 1 ? 'person' : 'people') +
+            ' going ' + from + ' <span class="cluster-arrow">&rarr;</span> ' + to + ':</div>' +
+            '<ul class="cluster-signin-steps">' +
+            '<li><a href="/login" onclick="event.stopPropagation()">Sign in with @tamu.edu</a> to see details</li>' +
+            '<li>Verify WhatsApp to message them</li>' +
+            '</ul></div>';
+    }
+
     var repDate = escHtml(cluster.repDate || '');
     return '<article class="cluster ' + direction + '" data-from="' + from + '" data-to="' + to + '" data-date="' + repDate + '" tabindex="0" role="button" aria-expanded="false">' +
         '<div class="cluster-head" onclick="toggleCluster(this.parentElement)">' +
@@ -232,7 +244,7 @@ function clusterHtml(cluster, direction, tier, userPhone, verifiedSet, tzPref) {
             '</div>' +
             '<span class="cluster-chevron">&#9656;</span>' +
         '</div>' +
-        '<div class="cluster-body"><div class="cluster-body-inner">' + personCards + '</div></div>' +
+        '<div class="cluster-body"><div class="cluster-body-inner">' + personCards + anonCta + '</div></div>' +
     '</article>';
 }
 
@@ -418,9 +430,9 @@ router.get(['/clusters', '/'], optionalAuth, async function(req, res) {
             dateBlocksHtml = '<div style="text-align:center;padding:40px 16px;color:#999;">No active ride requests right now.</div>';
         }
 
-        var subtitle = 'Tracking <strong>' + totalCount + ' ride request' + (totalCount !== 1 ? 's' : '') +
+        var subtitle = '<strong>' + totalCount + ' ride' + (totalCount !== 1 ? 's' : '') +
             '</strong> across <strong>' + activeGroupCount + ' WhatsApp group' + (activeGroupCount !== 1 ? 's' : '') +
-            '</strong> this week';
+            '</strong> this week, updated live';
 
         res.send(PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, activeGroupCount, tier, userEmail, userPhone, tzPref, userDisplayName));
     } catch (err) {
@@ -448,7 +460,7 @@ function tzFooterHtml(tzPref) {
 function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, totalCount, groupCount, tier, userEmail, userPhone, tzPref, userDisplayName) {
     var authHtml;
     if (tier === 0) {
-        authHtml = '<div class="auth-link"><a href="/login">Sign in with @tamu.edu</a> to see contact details</div>';
+        authHtml = '';
     } else if (tier === 1) {
         authHtml = '<div class="auth-link"><span class="auth-email-display">' + escHtml(userEmail || '') + '</span>' +
             ' &middot; <a href="/profile">My Profile</a>' +
@@ -463,17 +475,29 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
     var bannerHtml;
     if (tier === 0) {
         bannerHtml = '<div class="auth-banner anon" id="auth-banner">' +
-            '<span>&#128274; Names are hidden. <a href="/login">Sign in with @tamu.edu</a> to get started.</span>' +
+            '<div class="auth-banner-body"><span class="auth-banner-title">&#128274; Names are hidden.</span>' +
+            '<ul class="auth-banner-steps">' +
+            '<li><a href="/login">Sign in with @tamu.edu</a> to see details</li>' +
+            '<li>Verify WhatsApp to enable messaging</li>' +
+            '</ul></div>' +
             '<button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'" aria-label="Dismiss">&times;</button>' +
         '</div>';
     } else if (tier === 1) {
         bannerHtml = '<div class="auth-banner email-only" id="auth-banner">' +
-            '<span>&#128241; Verify your WhatsApp number to see full names and contact info. <a href="/verify/wa?returnTo=/clusters">Verify now &rarr;</a></span>' +
+            '<span>&#128241; One step left. Verify your WhatsApp to message riders and unlock full names. Takes about 30 seconds. <a href="/verify/wa?returnTo=/clusters">Verify now &rarr;</a></span>' +
             '<button class="auth-banner-close" onclick="document.getElementById(\'auth-banner\').style.display=\'none\'" aria-label="Dismiss">&times;</button>' +
         '</div>';
     } else {
         bannerHtml = '';
     }
+
+    // Sponsored banner (Poparide). Slot locked to 606x202 shape; image is 1212x404 @2x.
+    var adHtml = '<div class="ad-wrap">' +
+        '<div class="ad-label">Sponsored</div>' +
+        '<a class="ad-slot" href="https://www.poparide.com/en-us/edu/tamu/?utm_source=ridesplit&amp;utm_medium=banner&amp;utm_campaign=tamu-launch" target="_blank" rel="noopener sponsored" ' +
+        'onclick="beaconJson(\'/log-ad-click\',{ad:\'poparide-tamu\',page:\'clusters-ad\'});if(window.gtag)gtag(\'event\',\'ad_click\',{ad_name:\'poparide-tamu\'});">' +
+        '<img src="/public/poparide-banner.png" alt="Poparide: share your rides on the biggest carpooling app in North America. Now in Texas. Get $50 in credits." loading="lazy">' +
+        '</a></div>';
 
     return '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
         GA_TAG + '\n' +
@@ -485,8 +509,9 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '</div>\n' +
         '<div class="container">\n' +
         '<div class="hero"><h1>Aggie Connect</h1>' +
+        '<p class="hero-benefit">Find someone going your way.</p>' +
         '<p class="subtitle">' + subtitle + '</p>' +
-        '<p class="tagline">Find someone going your way. Updated in real time from WhatsApp groups. <a href="/faq">FAQs &mdash; how, why, what?</a></p>' +
+        '<p class="tagline">Real posts, pulled straight from the group chats. <a href="/faq">How it works</a></p>' +
         '<p class="legend"><span class="verified-tick verified-tick-legend">' + VERIFIED_SVG + '</span> = Phone number verified</p>' +
         authHtml +
         '<div class="now-wrap">' +
@@ -520,6 +545,9 @@ function PAGE_HTML(subtitle, toPills, fromPills, cityOptions, dateBlocksHtml, to
         '<div class="mobile-sheet-title">Where are you headed?</div>' +
         '<div class="city-list" id="cityList">' + cityOptions + '</div>' +
         '<button class="mobile-sheet-clear" id="mobileClear" onclick="clearMobileFilter()" style="display:none;">Clear filter</button></div>\n' +
+
+        // Sponsored banner (top of feed)
+        adHtml +
 
         // Date blocks
         dateBlocksHtml +
@@ -612,6 +640,7 @@ var CSS = [
 '.container { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }',
 '.hero { text-align: center; margin-bottom: 14px; }',
 '.hero h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }',
+'.hero .hero-benefit { font-size: 16px; font-weight: 600; color: var(--text); margin-top: 4px; }',
 '.hero .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }',
 '.hero .subtitle strong { color: var(--text); }',
 '.hero .tagline { font-size: 13px; color: var(--text-muted); margin-top: 4px; }',
@@ -622,6 +651,10 @@ var CSS = [
 '.auth-link a:hover { text-decoration: underline; }',
 '.auth-email-display { font-weight: 600; color: var(--text-secondary); }',
 '.auth-banner { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 12px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; line-height: 1.45; }',
+'.auth-banner-body { flex: 1; }',
+'.auth-banner-title { display: block; margin-bottom: 4px; }',
+'.auth-banner-steps { list-style: disc; margin: 0; padding-left: 18px; }',
+'.auth-banner-steps li { margin: 2px 0; }',
 '.auth-banner.anon { background: #fef3c7; border-color: #fde68a; color: #92400e; }',
 '.auth-banner.email-only { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }',
 '.auth-banner a { color: var(--maroon); font-weight: 700; text-decoration: none; }',
@@ -680,6 +713,10 @@ var CSS = [
 '.direction-label.arriving { color: #15803d; background: #f0fdf4; border-top: 1px solid #dcfce7; border-bottom: 1px solid #dcfce7; }',
 '.direction-label.others { color: #92400e; background: #fffbeb; border-top: 1px solid #fde68a; border-bottom: 1px solid #fde68a; }',
 '.direction-count { font-weight: 400; opacity: 0.7; }',
+'.ad-wrap { margin: 6px 0 16px; }',
+'.ad-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; margin: 0 0 5px 2px; }',
+'.ad-slot { display: block; width: 100%; aspect-ratio: 606 / 202; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }',
+'.ad-slot img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }',
 '.cluster { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; margin-bottom: 10px; transition: box-shadow 0.15s; }',
 '.cluster:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }',
 '.cluster.leaving { border-left: 3px solid var(--blue); }',
@@ -700,6 +737,13 @@ var CSS = [
 '.cluster-summary { font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 1.35; }',
 '.cluster-summary strong { color: var(--text); font-weight: 600; }',
 '.expand-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }',
+'.cluster-signin-cta { margin: 6px 10px 10px; padding: 10px 12px; background: #fef3c7; border: 1px solid #fde68a; border-radius: var(--radius-sm); color: #92400e; font-size: 12px; }',
+'.cluster-signin-head { font-weight: 600; margin-bottom: 4px; }',
+'.cluster-signin-head .cluster-arrow { color: inherit; }',
+'.cluster-signin-steps { list-style: disc; margin: 0; padding-left: 18px; }',
+'.cluster-signin-steps li { margin: 2px 0; }',
+'.cluster-signin-cta a { color: var(--maroon); font-weight: 700; text-decoration: none; }',
+'.cluster-signin-cta a:hover { text-decoration: underline; }',
 '.cluster.open .expand-hint { display: none; }',
 '.cluster-chevron { font-size: 18px; color: #888; flex-shrink: 0; transition: transform 0.2s ease; width: 24px; text-align: center; }',
 '.cluster.open .cluster-chevron { transform: rotate(90deg); }',

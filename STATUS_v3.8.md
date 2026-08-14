@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.20 | **Date:** Jul 28, 2026 | **App version:** 3.8.0
+**Version:** 1.21 | **Date:** Aug 14, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -611,6 +611,28 @@ Full audit report: `~/Desktop/ridesplit_audit_2026-07-21.md`
 - **Deleted dead `scripts/cluster-digest.js`** — superseded by lib/matchAlert.js; would have double-messaged matches if ever re-enabled and computed "today" in UTC.
 - CLAUDE.md PM2 list corrected (3 processes, no digest).
 - Known pre-existing test failures (untouched by this change): matcher.test.js "Houston IAH nearby penalty" case; `tmp_cluster_test.js` picked up by `node --test` due to naming.
+
+---
+
+## Aug 14, 2026 — Poparide Ad Slot + Homepage Value-Realization Copy
+
+Sponsored banner (Poparide) added to the top of the rides feed, plus a homepage copy/UX pass audited against the frontend-design and Next Move Theory (value-creation) frameworks.
+
+### Poparide ad
+- New sponsored slot at top of feed (routes/clusters.js), locked to a 606×202 box (`aspect-ratio: 606/202` + `object-fit: cover`) so any uploaded banner can't blow up the layout. Image `public/poparide-banner.png` (1212×404, 2x retina), served via `/public`.
+- Click link carries UTM: `https://www.poparide.com/en-us/edu/tamu/?utm_source=ridesplit&utm_medium=banner&utm_campaign=tamu-launch`.
+- Click logging: new `POST /log-ad-click` (routes/auth.js), **no auth gate** (counts signed-out users too), writes to new `ad_click_log` table (id, created_at, ad, page, user_email, phone). Also fires a GA `ad_click` event. Schema in `sql/ad_click_log.sql` (table created manually in Supabase).
+
+### Homepage value-realization copy (routes/clusters.js)
+- Hero leads with the benefit ("Find someone going your way.") above the stat.
+- Removed the duplicate T0 sign-in prompt (the hero `auth-link` line); one nudge now.
+- T0 sign-in messaging is honest + two-step, shown as bullets in the anon banner and in a per-ride CTA (one per cluster, on expand): "Sign in with @tamu.edu to see details" / "Verify WhatsApp to enable messaging".
+- T1 verify banner reframed as "One step left…"; locked button "Verify to unlock DM" → "Verify to message". The T1 gate itself is unchanged (kept by design).
+
+### Files touched
+- routes/clusters.js (hero, banners, per-ride CTA, ad slot, CSS)
+- routes/auth.js (`/log-ad-click` route)
+- sql/ad_click_log.sql (new), public/poparide-banner.png (new)
 
 ---
 

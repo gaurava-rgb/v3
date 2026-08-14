@@ -232,6 +232,23 @@ router.post('/log-expand', optionalAuth, async function(req, res) {
     }
 });
 
+router.post('/log-ad-click', optionalAuth, async function(req, res) {
+    // No auth gate — signed-out users click ads too. email/phone are null for anon.
+    try {
+        var { ad, page } = req.body;
+        await writeClient.from('ad_click_log').insert({
+            ad: ad || null,
+            page: page || null,
+            user_email: req.user ? (req.user.email || null) : null,
+            phone: req.user ? (req.user.phone || null) : null
+        });
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('log-ad-click error:', e.message);
+        res.json({ ok: false });
+    }
+});
+
 // GET /api/session-tier — returns current tier + phone for modal polling
 router.get('/api/session-tier', optionalAuth, function(req, res) {
     if (!req.user) return res.json({ tier: 0, phone: null });
