@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.21 | **Date:** Aug 14, 2026 | **App version:** 3.8.0
+**Version:** 1.22 | **Date:** Oct 8, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -112,6 +112,13 @@ Three session types, all coexist:
 **Tier detection** (`middleware/auth.js`): `getUserTier()` — T2 = `auth_type==='phone'` OR email linked to profile with non-null phone.
 
 ---
+
+## Local audit fix — October 8, 2026 (not deployed)
+
+- RS-01 and RS-19 fixed locally: retired legacy `wa_phone` authentication, signing/parsing, and cookie-derived email/profile linking. Old cookies are cleared. Email authentication and profile-backed WhatsApp verification remain supported.
+- Added `auth.test.js`: forged fallback-signed and malformed cookies cannot authenticate or link identities; email access/refresh and verified profile phone/tier continue working; logout clears all session cookies.
+- Validation: 65 tests passed, zero failures (14 new auth checks plus 51 existing parser/matcher checks), using mocked auth/storage and isolated dependencies with dummy Supabase configuration. Changed runtime files pass `node --check`.
+- Not deployed. Legacy phone-only sessions will require email login. Production secret configuration and any prior misuse remain unknown; this fix does not undo previously linked identities.
 
 ## Sprints Completed
 

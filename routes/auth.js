@@ -4,12 +4,11 @@
 
 var express = require('express');
 var router = express.Router();
-var { authClient, setAuthCookies, clearAuthCookies, setPhoneSessionCookie, clearPhoneSessionCookie, parsePhoneSession, optionalAuth } = require('../middleware/auth');
+var { authClient, setAuthCookies, clearAuthCookies, clearPhoneSessionCookie, optionalAuth } = require('../middleware/auth');
 var { writeClient } = require('../lib/supabase');
 var { renderLoginPage, renderVerifyPage, renderCheckEmailPage } = require('../lib/views');
 
 var CALLBACK_URL = 'https://ridesplit.app/auth/callback';
-var { upsertProfile, linkEmailToProfile } = require('../lib/profiles');
 
 router.get('/login', function(req, res) {
     var prefill = req.query.email || '';
@@ -89,15 +88,7 @@ router.get('/auth/callback', async function(req, res) {
 
         setAuthCookies(res, result.data.session.access_token, result.data.session.refresh_token);
 
-        var email = result.data.user && result.data.user.email;
-        var phoneToken = req.cookies.wa_phone;
-        if (phoneToken && email) {
-            var phoneData = parsePhoneSession(phoneToken);
-            if (phoneData && phoneData.phone) {
-                linkEmailToProfile(phoneData.phone, email)
-                    .catch(err => console.error('[Auth] linkEmailToProfile (callback) error:', err.message));
-            }
-        }
+        clearPhoneSessionCookie(res);
 
         res.redirect(next);
     } catch (err) {
@@ -159,15 +150,7 @@ router.post('/verify', async function(req, res) {
 
         setAuthCookies(res, result.data.session.access_token, result.data.session.refresh_token);
 
-        // If user also has an active phone session, link the email to their phone profile
-        var phoneToken = req.cookies.wa_phone;
-        if (phoneToken) {
-            var phoneData = parsePhoneSession(phoneToken);
-            if (phoneData && phoneData.phone) {
-                linkEmailToProfile(phoneData.phone, email)
-                    .catch(err => console.error('[Auth] linkEmailToProfile error:', err.message));
-            }
-        }
+        clearPhoneSessionCookie(res);
 
         res.redirect('/');
     } catch (err) {
