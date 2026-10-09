@@ -2,7 +2,7 @@
 
 Prepared October 6, 2026. This file is the durable entry point for a fresh agent.
 
-**Continuation update — October 8, 2026:** User authorized fixing/testing RS-01 and RS-19. Legacy phone-cookie authentication and cookie-derived profile linking are now removed locally; email/profile-backed verification remains. All 65 tests pass (14 new auth regressions). No deployment or production changes. See ranked finding continuation notes and STATUS_v3.8.md. Historical investigation-only constraints below describe the original audit; local auth fixes were subsequently authorized.
+**Continuation update — October 8, 2026:** User authorized fixing/testing RS-01 and RS-19. Legacy phone-cookie authentication and cookie-derived profile linking are removed and deployed in `2ea18ee`; email/profile-backed verification remains. All 65 tests pass (14 new auth regressions). Dashboard workers reloaded; live smoke checks passed, verified Oct 8, 3:28 PM CDT (UTC-5). Bot/monitor unchanged. See ranked finding continuation notes and STATUS_v3.8.md. Historical investigation-only constraints below describe the original audit; local auth fixes and dashboard deployment were subsequently authorized.
 
 ## User intent and current authorization
 

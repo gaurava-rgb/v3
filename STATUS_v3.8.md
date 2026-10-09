@@ -1,5 +1,5 @@
 # Aggie Connect v3 — Project Status
-**Version:** 1.22 | **Date:** Oct 8, 2026 | **App version:** 3.8.0
+**Version:** 1.23 | **Date:** Oct 8, 2026 | **App version:** 3.8.0
 
 Update this file after each sprint. Increment version (1.1, 1.2, ...) each time.
 
@@ -113,12 +113,13 @@ Three session types, all coexist:
 
 ---
 
-## Local audit fix — October 8, 2026 (not deployed)
+## Auth audit fix — October 8, 2026 (deployed)
 
-- RS-01 and RS-19 fixed locally: retired legacy `wa_phone` authentication, signing/parsing, and cookie-derived email/profile linking. Old cookies are cleared. Email authentication and profile-backed WhatsApp verification remain supported.
+- RS-01 and RS-19 deployed in commit `2ea18ee`: retired legacy `wa_phone` authentication, signing/parsing, and cookie-derived email/profile linking. Old cookies are cleared. Email authentication and profile-backed WhatsApp verification remain supported.
 - Added `auth.test.js`: forged fallback-signed and malformed cookies cannot authenticate or link identities; email access/refresh and verified profile phone/tier continue working; logout clears all session cookies.
 - Validation: 65 tests passed, zero failures (14 new auth checks plus 51 existing parser/matcher checks), using mocked auth/storage and isolated dependencies with dummy Supabase configuration. Changed runtime files pass `node --check`.
-- Not deployed. Legacy phone-only sessions will require email login. Production secret configuration and any prior misuse remain unknown; this fix does not undo previously linked identities.
+- Deployment verified Oct 8, 3:28 PM CDT (UTC-5): production checkout `2ea18ee`; both existing dashboard workers reloaded and online. Bot and monitor were not restarted. Origin/public malformed-cookie checks returned HTTP 200, tier 0 and cookie deletion; home, housing and login returned HTTP 200. All 14 auth regression checks also passed on the VPS before reload.
+- Legacy phone-only sessions now require email login. Production secret configuration and any prior misuse remain unknown; this fix does not undo previously linked identities. Dashboard still has two workers despite the single-instance ecosystem configuration (RS-11 remains open).
 
 ## Sprints Completed
 

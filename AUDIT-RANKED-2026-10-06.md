@@ -1,6 +1,6 @@
 # RideSplit ranked findings and implementation backlog
 
-Prepared October 6, 2026 against local HEAD `f83c504`. **RS-01 and RS-19 are fixed locally as of October 8, 2026; not deployed. Other findings remain open.** Read [AUDIT-HANDOFF.md](AUDIT-HANDOFF.md) first for context, authorization, source files, tests, and operational constraints. Read [AUDIT-LATENCY-2026-10-06.md](AUDIT-LATENCY-2026-10-06.md) for the independently investigated website slowness.
+Prepared October 6, 2026 against local HEAD `f83c504`. **RS-01 and RS-19 deployed in `2ea18ee` October 8, 2026; live smoke checks passed. Other findings remain open.** Read [AUDIT-HANDOFF.md](AUDIT-HANDOFF.md) first for context, authorization, source files, tests, and operational constraints. Read [AUDIT-LATENCY-2026-10-06.md](AUDIT-LATENCY-2026-10-06.md) for the independently investigated website slowness.
 
 ## How to use this ranking
 
@@ -46,7 +46,7 @@ Evidence labels: **Confirmed code** = directly present in the audited code; **Re
 
 ### RS-01 — Phone sessions use a known fallback secret
 
-**Continuation status — October 8, 2026: fixed locally, not deployed.** Removed legacy phone-cookie signing, parsing, T2 authentication, and cookie-derived email/profile linking in `middleware/auth.js` and `routes/auth.js`. Legacy cookies are cleared; email/profile-backed WhatsApp verification remains. `auth.test.js` adds 14 isolated regression checks; full suite: 65 passed, zero failed. No commit/deploy created. Legacy phone-only users must sign in by email after rollout. Production secret state and prior identity misuse remain unknown; no existing profile links were modified. Rollback to the prior auth code would restore the defects and is not a safe default.
+**Continuation status — October 8, 2026: deployed, live smoke checks passed.** Removed legacy phone-cookie signing, parsing, T2 authentication, and cookie-derived email/profile linking in `middleware/auth.js` and `routes/auth.js`. Legacy cookies are cleared; email/profile-backed WhatsApp verification remains. `auth.test.js` adds 14 isolated regression checks; full suite: 65 passed, zero failed. Deployed implementation commit `2ea18ee` via dashboard-only reload. All 14 auth tests passed on VPS. Verified Oct 8, 3:28 PM CDT (UTC-5): both workers online; origin/public malformed-cookie request returns tier 0 and clears cookie; home/housing/login HTTP 200. No live email OTP/account mutation performed. Legacy phone-only users must sign in by email after rollout. Production secret state and prior identity misuse remain unknown; no existing profile links were modified. Rollback to the prior auth code would restore the defects and is not a safe default.
 
 
 **Evidence:** `middleware/auth.js:13` defaults WA_OTP_SECRET to `change-me-in-production`. `signPhoneSession` at `25–31` signs a payload; `optionalAuth` at `78–84` accepts valid signed cookies as phone-auth tier 2. Local .env inspection checked presence only and found this variable absent/empty. This audit did not establish the effective VPS environment.
@@ -231,7 +231,7 @@ Evidence labels: **Confirmed code** = directly present in the audited code; **Re
 
 ### RS-19 — Invalid signature length throws rather than rejects session
 
-**Continuation status — October 8, 2026: fixed locally, not deployed.** Removed legacy phone-cookie signing, parsing, T2 authentication, and cookie-derived email/profile linking in `middleware/auth.js` and `routes/auth.js`. Legacy cookies are cleared; email/profile-backed WhatsApp verification remains. `auth.test.js` adds 14 isolated regression checks; full suite: 65 passed, zero failed. No commit/deploy created. Legacy phone-only users must sign in by email after rollout. Production secret state and prior identity misuse remain unknown; no existing profile links were modified. Rollback to the prior auth code would restore the defects and is not a safe default.
+**Continuation status — October 8, 2026: deployed, live smoke checks passed.** Removed legacy phone-cookie signing, parsing, T2 authentication, and cookie-derived email/profile linking in `middleware/auth.js` and `routes/auth.js`. Legacy cookies are cleared; email/profile-backed WhatsApp verification remains. `auth.test.js` adds 14 isolated regression checks; full suite: 65 passed, zero failed. Deployed implementation commit `2ea18ee` via dashboard-only reload. All 14 auth tests passed on VPS. Verified Oct 8, 3:28 PM CDT (UTC-5): both workers online; origin/public malformed-cookie request returns tier 0 and clears cookie; home/housing/login HTTP 200. No live email OTP/account mutation performed. Legacy phone-only users must sign in by email after rollout. Production secret state and prior identity misuse remain unknown; no existing profile links were modified. Rollback to the prior auth code would restore the defects and is not a safe default.
 
 
 **Reproduction:** parsePhoneSession('abc.x') in isolated VM throws `RangeError ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH`. `middleware/auth.js:42` calls timingSafeEqual outside its try without equal-length validation.
